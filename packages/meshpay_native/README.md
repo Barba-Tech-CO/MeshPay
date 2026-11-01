@@ -14,3 +14,9 @@ Core API: `MeshpayNative.readClock`, `getBluetoothStatus`,
 `startAdvertising`/`stopAdvertising`, `startScan`/`stopScan`,
 `listenL2cap`/`stopListenL2cap`, `openL2cap`, `sendL2cap`, `closeL2cap`,
 `events`, `setEchoHandler`, and `runLoopbackEcho`.
+
+## Security
+
+The L2CAP channel is neither authenticated nor encrypted.
+This plugin is currently used only for laboratory measurements (echo of random bytes).
+NO payment data may travel over it without an application-layer authenticated and encrypted protocol bound to the session identifier.
