@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Detect Rust project
+        id: detect
+        run: |
+          if [ -f core/Cargo.toml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+        if: steps.detect.outputs.present == 'true'
+        with:
+          toolchain: stable
+      - name: Check Rust formatting
+        if: steps.detect.outputs.present == 'true'
+        working-directory: core
+        run: cargo fmt --check
+      - name: Run Rust Clippy
+        if: steps.detect.outputs.present == 'true'
+        working-directory: core
+        run: cargo clippy --locked -- -D warnings
+      - name: Run Rust tests
+        if: steps.detect.outputs.present == 'true'
+        working-directory: core
+        run: cargo test --locked
+
+  flutter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Detect Flutter projects
+        id: detect
+        run: |
+          if [ -f app/pubspec.yaml ]; then
+            echo "app_present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "app_present=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -f app/design_system/pubspec.yaml ]; then
+            echo "design_system_present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "design_system_present=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -f app/pubspec.yaml ] || [ -f app/design_system/pubspec.yaml ]; then
+            echo "any_present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "any_present=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        if: steps.detect.outputs.any_present == 'true'
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+      - name: Analyze app
+        if: steps.detect.outputs.app_present == 'true'
+        working-directory: app
+        run: flutter analyze
+      - name: Test app
+        if: steps.detect.outputs.app_present == 'true'
+        working-directory: app
+        run: flutter test
+      - name: Analyze design system
+        if: steps.detect.outputs.design_system_present == 'true'
+        working-directory: app/design_system
+        run: flutter analyze
+      - name: Test design system
+        if: steps.detect.outputs.design_system_present == 'true'
+        working-directory: app/design_system
+        run: flutter test
