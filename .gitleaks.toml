@@ -1,0 +1,11 @@
+title = "MeshPay Gitleaks"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Only test fixture directories are allowlisted."
+paths = [
+    '''(^|/)test/''',
+    '''(^|/)tests/''',
+]
