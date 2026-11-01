@@ -12,7 +12,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
-for tool in cargo cargo-audit cargo-deny osv-scanner gitleaks git python3; do
+required_tools=(osv-scanner gitleaks git python3)
+if [[ -f "$repo_root/core/Cargo.toml" ]]; then
+  required_tools+=(cargo cargo-audit cargo-deny)
+fi
+
+for tool in "${required_tools[@]}"; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     printf 'Required tool is missing: %s\n' "$tool" >&2
     exit 1
@@ -21,14 +26,25 @@ done
 
 copy_fixtures() {
   local destination="$1"
-  mkdir -p "$destination/core" "$destination/packages/design_system" "$destination/app/android/app"
-  cp "$repo_root/core/Cargo.toml" "$repo_root/core/Cargo.lock" "$destination/core/"
-  cp -R "$repo_root/core/src" "$destination/core/src"
-  cp "$repo_root/app/pubspec.lock" "$destination/app/"
-  if [[ -f "$repo_root/packages/design_system/pubspec.lock" ]]; then
-    cp "$repo_root/packages/design_system/pubspec.lock" "$destination/packages/design_system/"
+  local lockfile
+  mkdir -p "$destination"
+  if [[ -f "$repo_root/core/Cargo.toml" ]]; then
+    mkdir -p "$destination/core"
+    cp "$repo_root/core/Cargo.toml" "$repo_root/core/Cargo.lock" "$destination/core/"
+    if [[ -d "$repo_root/core/src" ]]; then
+      cp -R "$repo_root/core/src" "$destination/core/src"
+    fi
   fi
-  cp "$repo_root/app/android/app/gradle.lockfile" "$destination/app/android/app/"
+  for lockfile in \
+    app/pubspec.lock \
+    packages/design_system/pubspec.lock \
+    packages/meshpay_native/pubspec.lock \
+    app/android/app/gradle.lockfile; do
+    if [[ -f "$repo_root/$lockfile" ]]; then
+      mkdir -p "$destination/$(dirname "$lockfile")"
+      cp "$repo_root/$lockfile" "$destination/$lockfile"
+    fi
+  done
   cp "$repo_root/deny.toml" "$destination/"
   cp "$repo_root/.gitleaks.toml" "$destination/"
   cp "$repo_root/osv-scanner.toml" "$destination/"
@@ -54,19 +70,34 @@ expect_failure() {
 
 run_osv() {
   local directory="$1"
+  local lockfile
+  local -a scan_args=(scan source --config ./osv-scanner.toml)
+  for lockfile in \
+    app/pubspec.lock \
+    packages/design_system/pubspec.lock \
+    packages/meshpay_native/pubspec.lock \
+    app/android/app/gradle.lockfile; do
+    if [[ -f "$directory/$lockfile" ]]; then
+      scan_args+=(--lockfile "$lockfile")
+    fi
+  done
+  if [[ "${#scan_args[@]}" -eq 4 ]]; then
+    printf 'No supported lockfiles found under %s\n' "$directory" >&2
+    return 1
+  fi
   (
     cd "$directory"
-    osv-scanner scan source \
-      --config ./osv-scanner.toml \
-      --lockfile app/pubspec.lock \
-      --lockfile packages/design_system/pubspec.lock \
-      --lockfile app/android/app/gradle.lockfile
+    osv-scanner "${scan_args[@]}"
   )
 }
 
 run_osv_lockfile() {
   local directory="$1"
   local lockfile="$2"
+  if [[ ! -f "$directory/$lockfile" ]]; then
+    printf 'Lockfile is missing: %s\n' "$directory/$lockfile" >&2
+    return 1
+  fi
   (
     cd "$directory"
     osv-scanner scan source --config ./osv-scanner.toml --lockfile "$lockfile"
@@ -90,6 +121,7 @@ run_clean_check() {
   fi
 }
 
+if [[ -f "$repo_root/core/Cargo.toml" ]]; then
 rust_case="$temp_root/case-rust-advisory"
 copy_fixtures "$rust_case"
 python3 - "$rust_case/core/Cargo.toml" <<'PY'
@@ -189,14 +221,31 @@ expect_failure \
   cargo deny --manifest-path "$source_case/core/Cargo.toml" \
     --config "$source_case/deny.toml" --locked check sources
 expected_failures=$((expected_failures + 1))
+else
+  printf 'RustSec advisory fixture: skipped (no Rust crate in this repository)\n'
+  printf 'Licence fixture: skipped (no Rust crate in this repository)\n'
+  printf 'Source fixture: skipped (no Rust crate in this repository)\n'
+fi
 
 pub_case="$temp_root/case-pub-advisory"
 copy_fixtures "$pub_case"
-python3 - "$pub_case/app/pubspec.lock" <<'PY'
+pub_lockfiles=()
+for lockfile in \
+  app/pubspec.lock \
+  packages/design_system/pubspec.lock \
+  packages/meshpay_native/pubspec.lock; do
+  if [[ -f "$pub_case/$lockfile" ]]; then
+    pub_lockfiles+=("$lockfile")
+  fi
+done
+if [[ "${#pub_lockfiles[@]}" -eq 0 ]]; then
+  printf 'No Pub lockfiles found for the advisory fixture\n' >&2
+  exit 1
+fi
+python3 - "$pub_case" "${pub_lockfiles[@]}" <<'PY'
 import sys
 
-path = sys.argv[1]
-lockfile = open(path, encoding="utf-8").read()
+directory = sys.argv[1]
 fixture = '''  archive:
     dependency: transitive
     description:
@@ -206,21 +255,29 @@ fixture = '''  archive:
     source: hosted
     version: "3.3.7"
 '''
-if "\n  archive:\n" in lockfile:
-    raise SystemExit("The Pub lockfile already contains the archive fixture")
-if "sdks:\n" not in lockfile:
-    raise SystemExit("Could not find the Pub lockfile insertion point")
-open(path, "w", encoding="utf-8").write(lockfile.replace("sdks:\n", fixture + "sdks:\n", 1))
+for relative_path in sys.argv[2:]:
+    path = f"{directory}/{relative_path}"
+    lockfile = open(path, encoding="utf-8").read()
+    if "\n  archive:\n" in lockfile:
+        raise SystemExit(f"The Pub lockfile already contains the archive fixture: {relative_path}")
+    if "sdks:\n" not in lockfile:
+        raise SystemExit(f"Could not find the Pub lockfile insertion point: {relative_path}")
+    with open(path, "w", encoding="utf-8") as file:
+        file.write(lockfile.replace("sdks:\n", fixture + "sdks:\n", 1))
 PY
 expect_failure \
   "OSV Pub advisory fixture" \
   "GHSA-9v85-q87q-g4vg" \
   "$temp_root/pub-osv.log" \
-  run_osv_lockfile "$pub_case" app/pubspec.lock
+  run_osv "$pub_case"
 expected_failures=$((expected_failures + 1))
 
 gradle_case="$temp_root/case-gradle-advisory"
 copy_fixtures "$gradle_case"
+if [[ ! -f "$gradle_case/app/android/app/gradle.lockfile" ]]; then
+  printf 'Gradle lockfile is missing: app/android/app/gradle.lockfile\n' >&2
+  exit 1
+fi
 printf '\norg.apache.logging.log4j:log4j-core:2.14.1=compileClasspath\n' \
   >>"$gradle_case/app/android/app/gradle.lockfile"
 expect_failure \
@@ -247,19 +304,30 @@ expect_failure \
   gitleaks dir --config "$secret_case/.gitleaks.toml" --redact --no-banner "$secret_case"
 expected_failures=$((expected_failures + 1))
 
-printf '%s of 6 injected cases failed as expected\n' "$expected_failures"
-if [[ "$expected_failures" -ne 6 ]]; then
+if [[ -f "$repo_root/core/Cargo.toml" ]]; then
+  applicable_cases=6
+else
+  applicable_cases=3
+fi
+if [[ "$expected_failures" -ne "$applicable_cases" ]]; then
+  printf '%s of %s applicable injected cases failed as expected\n' \
+    "$expected_failures" "$applicable_cases"
   exit 1
 fi
 
 clean_case="$temp_root/clean"
 copy_fixtures "$clean_case"
-run_clean_check "cargo-audit" cargo audit --file "$clean_case/core/Cargo.lock"
-for check in advisories licenses sources bans; do
-  run_clean_check "cargo-deny-$check" \
-    cargo deny --manifest-path "$clean_case/core/Cargo.toml" \
-      --config "$clean_case/deny.toml" --locked check "$check"
-done
+if [[ -f "$repo_root/core/Cargo.toml" ]]; then
+  run_clean_check "cargo-audit" cargo audit --file "$clean_case/core/Cargo.lock"
+  for check in advisories licenses sources bans; do
+    run_clean_check "cargo-deny-$check" \
+      cargo deny --manifest-path "$clean_case/core/Cargo.toml" \
+        --config "$clean_case/deny.toml" --locked check "$check"
+  done
+else
+  printf 'Clean check skipped: cargo audit (no Rust crate in this repository)\n'
+  printf 'Clean check skipped: cargo deny (no Rust crate in this repository)\n'
+fi
 run_clean_check "osv-lockfiles" run_osv "$clean_case"
 run_clean_check "gitleaks-files" \
   gitleaks dir --config "$clean_case/.gitleaks.toml" --redact --no-banner "$clean_case"
@@ -276,3 +344,9 @@ if [[ "$clean_status" -ne 0 ]]; then
 fi
 
 printf 'Clean-tree security checks passed.\n'
+if [[ -f "$repo_root/core/Cargo.toml" ]]; then
+  printf '%s of 6 injected cases failed as expected\n' "$expected_failures"
+else
+  printf '%s of 3 applicable injected cases failed as expected (3 skipped: no Rust crate)\n' \
+    "$expected_failures"
+fi
