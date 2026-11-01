@@ -1,0 +1,22 @@
+[package]
+name = "meshpay_core"
+version = "0.1.0"
+publish = false
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+flutter_rust_bridge = "=2.13.0"
+p256 = "0.14.0"
+prost = "0.14.4"
+rusqlite = { version = "0.41.1", features = ["bundled-sqlcipher-vendored-openssl"] }
+rustc_version_runtime = "0.3.0"
+snow = "0.10.0"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
