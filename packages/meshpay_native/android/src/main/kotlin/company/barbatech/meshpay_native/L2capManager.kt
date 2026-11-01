@@ -22,6 +22,8 @@ class L2capManager(
   private val mainHandler = Handler(Looper.getMainLooper())
   private val channelIds = AtomicInteger(1)
   private val connections = ConcurrentHashMap<Int, L2capConnection>()
+  private val serverConnectionLimiter =
+    L2capConnectionLimiter(L2capConnectionLimiter.maxServerConnections)
   private val serverLock = Any()
 
   @Volatile
@@ -119,6 +121,9 @@ class L2capManager(
         "invalid_channel",
         "The L2CAP channel is not open.",
       )
+    if (connection.fromServer) {
+      serverConnectionLimiter.release()
+    }
     connection.writer.shutdownNow()
     var closeFailure: IOException? = null
     try {
@@ -160,12 +165,19 @@ class L2capManager(
     while (serverSocket === server) {
       try {
         val socket = server.accept()
-        try {
-          registerConnection(socket, "server")
-        } catch (error: SecurityException) {
-          failUnconnectedSocket(socket)
-          throw error
+        if (!serverConnectionLimiter.tryAcquire()) {
+          try {
+            socket.close()
+          } catch (error: IOException) {
+            events.emitError("l2cap_io_error", "Closing a rejected L2CAP socket failed.")
+          }
+          events.emitError(
+            "l2cap_too_many_connections",
+            "Too many L2CAP server connections are open.",
+          )
+          continue
         }
+        registerConnection(socket, "server")
       } catch (error: IOException) {
         if (serverSocket === server) {
           events.emitError("l2cap_io_error", "Accepting an L2CAP channel failed.")
@@ -217,23 +229,38 @@ class L2capManager(
   }
 
   private fun registerConnection(socket: BluetoothSocket, role: String): Int {
-    val deviceId = socket.remoteDevice.address
     val channelId = channelIds.getAndIncrement()
-    val connection = L2capConnection(channelId, socket)
-    connections[channelId] = connection
-    events.emit(
-      mapOf(
-        "type" to "l2capOpened",
-        "channelId" to channelId,
-        "role" to role,
-        "deviceId" to deviceId,
-      ),
-    )
-    Thread(
-      { readConnection(connection) },
-      "meshpay-l2cap-reader-$channelId",
-    ).start()
-    return channelId
+    val fromServer = role == "server"
+    var registered = false
+    try {
+      val newConnection = L2capConnection(channelId, socket, fromServer)
+      val deviceId = socket.remoteDevice.address
+      connections[channelId] = newConnection
+      registered = true
+      events.emit(
+        mapOf(
+          "type" to "l2capOpened",
+          "channelId" to channelId,
+          "role" to role,
+          "deviceId" to deviceId,
+        ),
+      )
+      Thread(
+        { readConnection(newConnection) },
+        "meshpay-l2cap-reader-$channelId",
+      ).start()
+      return channelId
+    } catch (error: RuntimeException) {
+      if (registered) {
+        finishConnection(channelId, false)
+      } else {
+        if (fromServer) {
+          serverConnectionLimiter.release()
+        }
+        failUnconnectedSocket(socket)
+      }
+      throw error
+    }
   }
 
   private fun readConnection(connection: L2capConnection) {
@@ -270,6 +297,9 @@ class L2capManager(
 
   private fun finishConnection(channelId: Int, reportIoFailure: Boolean) {
     val connection = connections.remove(channelId) ?: return
+    if (connection.fromServer) {
+      serverConnectionLimiter.release()
+    }
     connection.writer.shutdownNow()
     try {
       connection.socket.close()
