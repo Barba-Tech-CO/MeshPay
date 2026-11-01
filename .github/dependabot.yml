@@ -1,14 +1,5 @@
 version: 2
 updates:
-  - package-ecosystem: cargo
-    directory: /core
-    schedule:
-      interval: weekly
-    groups:
-      minor-and-patch:
-        update-types:
-          - minor
-          - patch
   - package-ecosystem: pub
     directory: /app
     schedule:
@@ -20,6 +11,15 @@ updates:
           - patch
   - package-ecosystem: pub
     directory: /packages/design_system
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+  - package-ecosystem: pub
+    directory: /packages/meshpay_native
     schedule:
       interval: weekly
     groups:

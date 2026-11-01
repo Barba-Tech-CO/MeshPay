@@ -60,7 +60,12 @@ jobs:
           else
             echo "design_system_present=false" >> "$GITHUB_OUTPUT"
           fi
-          if [ -f app/pubspec.yaml ] || [ -f packages/design_system/pubspec.yaml ]; then
+          if [ -f packages/meshpay_native/pubspec.yaml ]; then
+            echo "meshpay_native_present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "meshpay_native_present=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -f app/pubspec.yaml ] || [ -f packages/design_system/pubspec.yaml ] || [ -f packages/meshpay_native/pubspec.yaml ]; then
             echo "any_present=true" >> "$GITHUB_OUTPUT"
           else
             echo "any_present=false" >> "$GITHUB_OUTPUT"
@@ -85,4 +90,12 @@ jobs:
       - name: Test design system
         if: steps.detect.outputs.design_system_present == 'true'
         working-directory: packages/design_system
+        run: flutter test
+      - name: Analyze native plugin
+        if: steps.detect.outputs.meshpay_native_present == 'true'
+        working-directory: packages/meshpay_native
+        run: flutter analyze
+      - name: Test native plugin
+        if: steps.detect.outputs.meshpay_native_present == 'true'
+        working-directory: packages/meshpay_native
         run: flutter test
