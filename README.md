@@ -1,15 +1,13 @@
 # MeshPay
 
-Phase 0 offline BLE payment prototype: Flutter UI with a shared Rust core.
+Phase 0 offline BLE payment prototype: Flutter app (Rust is planned for the backend only).
 
 ## Layout
 - `app/`: Flutter Android (minSdk 29) and iOS (deployment target 15.0).
-- `app/design_system/`: shared theme and color tokens (IBM Plex through the `google_fonts` package).
-- `core/`: Rust API, Noise, protobuf and SQLCipher dependencies.
+- `packages/design_system/`: shared theme and color tokens (IBM Plex through the `google_fonts` package).
 
 ## Run
 - `cd app && flutter pub get && flutter run`
-- `cd core && cargo test`
 
 ## Security CI
 - Pull requests and pushes to `main` run RustSec, cargo-deny, OSV-Scanner, Gitleaks, Rust, and Flutter checks.

@@ -55,12 +55,12 @@ jobs:
           else
             echo "app_present=false" >> "$GITHUB_OUTPUT"
           fi
-          if [ -f app/design_system/pubspec.yaml ]; then
+          if [ -f packages/design_system/pubspec.yaml ]; then
             echo "design_system_present=true" >> "$GITHUB_OUTPUT"
           else
             echo "design_system_present=false" >> "$GITHUB_OUTPUT"
           fi
-          if [ -f app/pubspec.yaml ] || [ -f app/design_system/pubspec.yaml ]; then
+          if [ -f app/pubspec.yaml ] || [ -f packages/design_system/pubspec.yaml ]; then
             echo "any_present=true" >> "$GITHUB_OUTPUT"
           else
             echo "any_present=false" >> "$GITHUB_OUTPUT"
@@ -80,9 +80,9 @@ jobs:
         run: flutter test
       - name: Analyze design system
         if: steps.detect.outputs.design_system_present == 'true'
-        working-directory: app/design_system
+        working-directory: packages/design_system
         run: flutter analyze
       - name: Test design system
         if: steps.detect.outputs.design_system_present == 'true'
-        working-directory: app/design_system
+        working-directory: packages/design_system
         run: flutter test

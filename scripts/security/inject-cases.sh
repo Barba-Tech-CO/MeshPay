@@ -21,12 +21,12 @@ done
 
 copy_fixtures() {
   local destination="$1"
-  mkdir -p "$destination/core" "$destination/app/design_system" "$destination/app/android/app"
+  mkdir -p "$destination/core" "$destination/packages/design_system" "$destination/app/android/app"
   cp "$repo_root/core/Cargo.toml" "$repo_root/core/Cargo.lock" "$destination/core/"
   cp -R "$repo_root/core/src" "$destination/core/src"
   cp "$repo_root/app/pubspec.lock" "$destination/app/"
-  if [[ -f "$repo_root/app/design_system/pubspec.lock" ]]; then
-    cp "$repo_root/app/design_system/pubspec.lock" "$destination/app/design_system/"
+  if [[ -f "$repo_root/packages/design_system/pubspec.lock" ]]; then
+    cp "$repo_root/packages/design_system/pubspec.lock" "$destination/packages/design_system/"
   fi
   cp "$repo_root/app/android/app/gradle.lockfile" "$destination/app/android/app/"
   cp "$repo_root/deny.toml" "$destination/"
@@ -59,7 +59,7 @@ run_osv() {
     osv-scanner scan source \
       --config ./osv-scanner.toml \
       --lockfile app/pubspec.lock \
-      --lockfile app/design_system/pubspec.lock \
+      --lockfile packages/design_system/pubspec.lock \
       --lockfile app/android/app/gradle.lockfile
   )
 }
