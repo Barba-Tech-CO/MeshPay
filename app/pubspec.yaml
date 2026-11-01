@@ -1,0 +1,30 @@
+name: meshpay
+description: Offline BLE payment prototype.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.7
+
+dependencies:
+  design_system:
+    path: ../packages/design_system
+
+  flutter:
+    sdk: flutter
+
+  flutter_modular: ^7.1.1
+
+  meshpay_native:
+    path: ../packages/meshpay_native
+
+  path_provider: ^2.1.6
+  permission_handler: ^13.0.2
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

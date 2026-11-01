@@ -1,0 +1,43 @@
+import 'package:design_system/design_system.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_modular/flutter_modular.dart';
+
+import '../../../../core/routes/app_routes.dart';
+
+class LabPage extends StatelessWidget {
+  const LabPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Laboratório')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          SectionCardDs(
+            title: 'Medições da Fase 0',
+            child: Column(
+              children: [
+                ListTile(
+                  title: const Text('Relógio e reinício'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.pushNamed(AppRoutes.labClock),
+                ),
+                ListTile(
+                  title: const Text('Canal nativo'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.pushNamed(AppRoutes.labChannel),
+                ),
+                ListTile(
+                  title: const Text('Bluetooth'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.pushNamed(AppRoutes.labBluetooth),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
