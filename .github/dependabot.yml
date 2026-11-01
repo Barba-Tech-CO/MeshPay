@@ -19,7 +19,7 @@ updates:
           - minor
           - patch
   - package-ecosystem: pub
-    directory: /app/design_system
+    directory: /packages/design_system
     schedule:
       interval: weekly
     groups:

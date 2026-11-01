@@ -59,7 +59,7 @@ jobs:
           scan_args="--config=./osv-scanner.toml"
           for lockfile in \
             app/pubspec.lock \
-            app/design_system/pubspec.lock \
+            packages/design_system/pubspec.lock \
             app/android/app/gradle.lockfile; do
             if [ -f "$lockfile" ]; then
               present=true
