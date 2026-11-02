@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../helpers/noise_handshake_label_helper.dart';
 import '../view_models/l2cap_payer_lab_view_model.dart';
 
 class L2capPayerLabPage extends StatefulWidget {
@@ -15,6 +16,7 @@ class L2capPayerLabPage extends StatefulWidget {
 class _L2capPayerLabPageState extends State<L2capPayerLabPage> {
   final TextEditingController _sessionController = TextEditingController();
   final TextEditingController _psmController = TextEditingController();
+  final TextEditingController _keyController = TextEditingController();
   final TextEditingController _deviceIdController = TextEditingController();
   bool _isQrScannerVisible = false;
 
@@ -22,6 +24,7 @@ class _L2capPayerLabPageState extends State<L2capPayerLabPage> {
   void dispose() {
     _sessionController.dispose();
     _psmController.dispose();
+    _keyController.dispose();
     _deviceIdController.dispose();
     super.dispose();
   }
@@ -29,6 +32,9 @@ class _L2capPayerLabPageState extends State<L2capPayerLabPage> {
   @override
   Widget build(BuildContext context) {
     final viewModel = context.watch<L2capPayerLabViewModel>();
+    final handshakeLabel = NoiseHandshakeLabelHelper.labelFor(
+      viewModel.handshakeStatus,
+    );
 
     return Scaffold(
       appBar: AppBar(title: const Text('Pagador L2CAP')),
@@ -52,6 +58,13 @@ class _L2capPayerLabPageState extends State<L2capPayerLabPage> {
                   onChanged: viewModel.updatePsm,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(labelText: 'PSM'),
+                ),
+                TextField(
+                  controller: _keyController,
+                  onChanged: viewModel.updateKeyHex,
+                  decoration: const InputDecoration(
+                    labelText: 'Chave pública do receptor (hex)',
+                  ),
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton(
@@ -131,7 +144,50 @@ class _L2capPayerLabPageState extends State<L2capPayerLabPage> {
           ),
           const SizedBox(height: 16),
           SectionCardDs(
-            title: 'Eco enquadrado (25 KB x 5)',
+            title: 'Handshake Noise XK',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                MetricRowDs(label: 'Estado', value: handshakeLabel),
+                MetricRowDs(
+                  label: 'Mensagens (bytes)',
+                  value: viewModel.handshakeMessageSizes.isEmpty
+                      ? 'Indisponível'
+                      : viewModel.handshakeMessageSizes.join(' / '),
+                  mono: true,
+                ),
+                MetricRowDs(
+                  label: 'Total (esperado 160)',
+                  value: viewModel.handshakeMessageSizes.isEmpty
+                      ? 'Indisponível'
+                      : '${viewModel.handshakeTotalBytes}',
+                  mono: true,
+                ),
+                MetricRowDs(
+                  label: 'Handshake p50 (ms)',
+                  value:
+                      viewModel.handshakeP50Milliseconds?.toStringAsFixed(3) ??
+                      'Indisponível',
+                  mono: true,
+                ),
+                MetricRowDs(
+                  label: 'Handshake p95 (ms)',
+                  value:
+                      viewModel.handshakeP95Milliseconds?.toStringAsFixed(3) ??
+                      'Indisponível',
+                  mono: true,
+                ),
+                MetricRowDs(
+                  label: 'Conexões medidas',
+                  value: '${viewModel.handshakeDurationsMilliseconds.length}',
+                  mono: true,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          SectionCardDs(
+            title: 'Eco cifrado (25 KB x 5)',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -192,6 +248,7 @@ class _L2capPayerLabPageState extends State<L2capPayerLabPage> {
     setState(() {
       _sessionController.text = viewModel.sessionIdHex;
       _psmController.text = viewModel.psm;
+      _keyController.text = viewModel.keyHex;
       _isQrScannerVisible = false;
     });
   }
