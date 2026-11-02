@@ -1,17 +1,23 @@
+use crate::dtn_buffer::DtnEngine;
+use crate::dtn_ingest_outcome::IngestOutcome;
+use crate::dtn_peer_session::DtnPeerSession;
 use crate::payer_tx_engine::PayerEngine;
 use crate::receiver_tx_engine::ReceiverEngine;
 use crate::tx_keys::{compressed_public_key, signing_key_from_seed};
+use crate::tx_wire::sync_envelope::SyncEnvelope;
 use flutter_rust_bridge::frb;
 use p256::ecdsa::{
   Signature, SigningKey,
   signature::{Signer, Verifier},
 };
+use prost::Message;
 use rusqlite::Connection;
 use snow::{Builder, HandshakeState, TransportState, params::NoiseParams};
 use std::fs::{self, OpenOptions};
 use std::io;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Instant;
 use zeroize::Zeroizing;
 
@@ -499,5 +505,102 @@ mod tests {
         .next()
         .is_none()
     );
+  }
+}
+
+/// `SyncEnvelope` bytes for `encrypted_server_batch` (opaque to carriers); `envelope_id` is its hash.
+#[frb(sync)]
+pub fn build_dtn_envelope(
+  encrypted_server_batch: Vec<u8>,
+  created_at_unix: u64,
+  ttl_hops: u32,
+  known_revocation_version: u64,
+) -> Vec<u8> {
+  SyncEnvelope::new(
+    encrypted_server_batch,
+    created_at_unix,
+    ttl_hops,
+    known_revocation_version,
+  )
+  .encode_to_vec()
+}
+
+/// Third-party DTN envelope buffer (PRD 8.1), foreground gossip only. All messages are bytes.
+pub struct DtnBuffer {
+  engine: Arc<DtnEngine>,
+}
+
+impl DtnBuffer {
+  /// `db_key` is the raw 32-byte SQLCipher key; `snapshot_public_key` is the compressed P-256
+  /// SNAPSHOT role key; `max_ingest_per_minute` is the global ingest rate limit.
+  pub fn open(
+    db_path: String,
+    db_key: Vec<u8>,
+    snapshot_public_key: Vec<u8>,
+    max_ingest_per_minute: u32,
+  ) -> Result<DtnBuffer, String> {
+    let db_key = Zeroizing::new(db_key);
+    Ok(DtnBuffer {
+      engine: Arc::new(DtnEngine::open(
+        Path::new(&db_path),
+        &db_key,
+        &snapshot_public_key,
+        max_ingest_per_minute,
+      )?),
+    })
+  }
+
+  /// One session per connected peer; all inbound envelopes go through it (20 per connection).
+  #[frb(sync)]
+  pub fn open_session(&self) -> DtnSession {
+    DtnSession {
+      session: DtnPeerSession::new(Arc::clone(&self.engine)),
+    }
+  }
+
+  /// Held envelope ids (32 bytes each), capped at 256.
+  pub fn summary(&self) -> Result<Vec<Vec<u8>>, String> {
+    self.engine.summary()
+  }
+
+  /// Envelopes (bytes, one hop consumed) the peer lacks, at most 20.
+  pub fn missing_from(&self, peer_summary: Vec<Vec<u8>>) -> Result<Vec<Vec<u8>>, String> {
+    self.engine.missing_from(&peer_summary)
+  }
+
+  /// Envelopes for the first 20 requested ids.
+  pub fn envelopes_for(&self, ids: Vec<Vec<u8>>) -> Result<Vec<Vec<u8>>, String> {
+    self.engine.envelopes_for(&ids)
+  }
+
+  /// Deletes expired envelopes; returns how many.
+  pub fn sweep(&self, now_unix: u64) -> Result<u32, String> {
+    self.engine.sweep(now_unix)
+  }
+
+  /// Stores a `RevocationSnapshot` only if signed by the SNAPSHOT key and newer; returns its version.
+  pub fn ingest_snapshot(&self, snapshot: Vec<u8>) -> Result<u64, String> {
+    self.engine.ingest_snapshot(&snapshot)
+  }
+
+  pub fn snapshot_bytes(&self) -> Result<Option<Vec<u8>>, String> {
+    self.engine.snapshot_bytes()
+  }
+}
+
+/// Inbound side of one peer connection.
+pub struct DtnSession {
+  session: DtnPeerSession,
+}
+
+impl DtnSession {
+  /// `Ok(true)` stored, `Ok(false)` duplicate; every other outcome (invalid, refused, rate
+  /// limited, session budget used up) is `Err(reason)`.
+  pub fn ingest(&self, envelope: Vec<u8>, now_unix: u64) -> Result<bool, String> {
+    match self.session.ingest(&envelope, now_unix)? {
+      IngestOutcome::Stored => Ok(true),
+      IngestOutcome::Duplicate => Ok(false),
+      rejected => Err(format!("envelope rejected: {rejected:?}")),
+    }
   }
 }
