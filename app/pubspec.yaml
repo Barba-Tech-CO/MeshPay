@@ -18,8 +18,10 @@ dependencies:
   meshpay_native:
     path: ../packages/meshpay_native
 
+  mobile_scanner: ^7.5.0
   path_provider: ^2.1.6
   permission_handler: ^13.0.2
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_lints: ^6.0.0
