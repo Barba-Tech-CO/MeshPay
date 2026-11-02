@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 32818662;
+  int get rustContentHash => 1586540694;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -111,11 +111,55 @@ abstract class RustLibApi extends BaseApi {
     required List<int> payload,
   });
 
+  Future<int> crateApiPayerTxEngineExpireLocked({
+    required PayerTxEngine that,
+    required BigInt nowUnix,
+    required BigInt expirySecs,
+  });
+
+  Future<void> crateApiPayerTxEngineOnAck({
+    required PayerTxEngine that,
+    required List<int> ack,
+  });
+
+  Future<PayerTxEngine> crateApiPayerTxEngineOpen({
+    required String dbPath,
+    required List<int> dbKey,
+    required List<int> signingSeed,
+    required List<int> payeePublicKey,
+  });
+
+  Future<Uint8List> crateApiPayerTxEnginePropose({
+    required PayerTxEngine that,
+    required List<int> spendBody,
+    required BigInt counter,
+    required List<int> recipientId,
+  });
+
+  Future<List<Uint8List>> crateApiPayerTxEngineResumePending({
+    required PayerTxEngine that,
+  });
+
+  Future<Uint8List> crateApiReceiverTxEngineOnPropose({
+    required ReceiverTxEngine that,
+    required List<int> propose,
+  });
+
+  Future<ReceiverTxEngine> crateApiReceiverTxEngineOpen({
+    required String dbPath,
+    required List<int> dbKey,
+    required List<int> signingSeed,
+    required List<int> payerPublicKey,
+    required List<int> ownAccountId,
+  });
+
   Future<CoreSelfcheck> crateApiCoreSelfcheck({required String storageDir});
 
   String crateApiCoreVersion();
 
   Future<Uint8List> crateApiEcho({required List<int> data});
+
+  Future<LabSigningKey> crateApiGenerateLabSigningKey();
 
   NoiseKeypair crateApiGenerateNoiseStaticKeypair();
 
@@ -128,6 +172,24 @@ abstract class RustLibApi extends BaseApi {
   get rust_arc_decrement_strong_count_NoiseSession;
 
   CrossPlatformFinalizerArg get rust_arc_decrement_strong_count_NoiseSessionPtr;
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_PayerTxEngine;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_PayerTxEngine;
+
+  CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_PayerTxEnginePtr;
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_ReceiverTxEngine;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_ReceiverTxEngine;
+
+  CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_ReceiverTxEnginePtr;
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -382,6 +444,286 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<int> crateApiPayerTxEngineExpireLocked({
+    required PayerTxEngine that,
+    required BigInt nowUnix,
+    required BigInt expirySecs,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPayerTxEngine(
+            that,
+            serializer,
+          );
+          sse_encode_u_64(nowUnix, serializer);
+          sse_encode_u_64(expirySecs, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 8,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_32,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiPayerTxEngineExpireLockedConstMeta,
+        argValues: [that, nowUnix, expirySecs],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPayerTxEngineExpireLockedConstMeta =>
+      const TaskConstMeta(
+        debugName: "PayerTxEngine_expire_locked",
+        argNames: ["that", "nowUnix", "expirySecs"],
+      );
+
+  @override
+  Future<void> crateApiPayerTxEngineOnAck({
+    required PayerTxEngine that,
+    required List<int> ack,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPayerTxEngine(
+            that,
+            serializer,
+          );
+          sse_encode_list_prim_u_8_loose(ack, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 9,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiPayerTxEngineOnAckConstMeta,
+        argValues: [that, ack],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPayerTxEngineOnAckConstMeta => const TaskConstMeta(
+    debugName: "PayerTxEngine_on_ack",
+    argNames: ["that", "ack"],
+  );
+
+  @override
+  Future<PayerTxEngine> crateApiPayerTxEngineOpen({
+    required String dbPath,
+    required List<int> dbKey,
+    required List<int> signingSeed,
+    required List<int> payeePublicKey,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dbPath, serializer);
+          sse_encode_list_prim_u_8_loose(dbKey, serializer);
+          sse_encode_list_prim_u_8_loose(signingSeed, serializer);
+          sse_encode_list_prim_u_8_loose(payeePublicKey, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 10,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData:
+              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPayerTxEngine,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiPayerTxEngineOpenConstMeta,
+        argValues: [dbPath, dbKey, signingSeed, payeePublicKey],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPayerTxEngineOpenConstMeta => const TaskConstMeta(
+    debugName: "PayerTxEngine_open",
+    argNames: ["dbPath", "dbKey", "signingSeed", "payeePublicKey"],
+  );
+
+  @override
+  Future<Uint8List> crateApiPayerTxEnginePropose({
+    required PayerTxEngine that,
+    required List<int> spendBody,
+    required BigInt counter,
+    required List<int> recipientId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPayerTxEngine(
+            that,
+            serializer,
+          );
+          sse_encode_list_prim_u_8_loose(spendBody, serializer);
+          sse_encode_u_64(counter, serializer);
+          sse_encode_list_prim_u_8_loose(recipientId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 11,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_u_8_strict,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiPayerTxEngineProposeConstMeta,
+        argValues: [that, spendBody, counter, recipientId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPayerTxEngineProposeConstMeta =>
+      const TaskConstMeta(
+        debugName: "PayerTxEngine_propose",
+        argNames: ["that", "spendBody", "counter", "recipientId"],
+      );
+
+  @override
+  Future<List<Uint8List>> crateApiPayerTxEngineResumePending({
+    required PayerTxEngine that,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPayerTxEngine(
+            that,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 12,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_list_prim_u_8_strict,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiPayerTxEngineResumePendingConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPayerTxEngineResumePendingConstMeta =>
+      const TaskConstMeta(
+        debugName: "PayerTxEngine_resume_pending",
+        argNames: ["that"],
+      );
+
+  @override
+  Future<Uint8List> crateApiReceiverTxEngineOnPropose({
+    required ReceiverTxEngine that,
+    required List<int> propose,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReceiverTxEngine(
+            that,
+            serializer,
+          );
+          sse_encode_list_prim_u_8_loose(propose, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 13,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_u_8_strict,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiReceiverTxEngineOnProposeConstMeta,
+        argValues: [that, propose],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiReceiverTxEngineOnProposeConstMeta =>
+      const TaskConstMeta(
+        debugName: "ReceiverTxEngine_on_propose",
+        argNames: ["that", "propose"],
+      );
+
+  @override
+  Future<ReceiverTxEngine> crateApiReceiverTxEngineOpen({
+    required String dbPath,
+    required List<int> dbKey,
+    required List<int> signingSeed,
+    required List<int> payerPublicKey,
+    required List<int> ownAccountId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dbPath, serializer);
+          sse_encode_list_prim_u_8_loose(dbKey, serializer);
+          sse_encode_list_prim_u_8_loose(signingSeed, serializer);
+          sse_encode_list_prim_u_8_loose(payerPublicKey, serializer);
+          sse_encode_list_prim_u_8_loose(ownAccountId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 14,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData:
+              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReceiverTxEngine,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiReceiverTxEngineOpenConstMeta,
+        argValues: [dbPath, dbKey, signingSeed, payerPublicKey, ownAccountId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiReceiverTxEngineOpenConstMeta =>
+      const TaskConstMeta(
+        debugName: "ReceiverTxEngine_open",
+        argNames: [
+          "dbPath",
+          "dbKey",
+          "signingSeed",
+          "payerPublicKey",
+          "ownAccountId",
+        ],
+      );
+
+  @override
   Future<CoreSelfcheck> crateApiCoreSelfcheck({required String storageDir}) {
     return handler.executeNormal(
       NormalTask(
@@ -391,7 +733,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 15,
             port: port_,
           );
         },
@@ -417,7 +759,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -443,7 +785,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 17,
             port: port_,
           );
         },
@@ -462,12 +804,39 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "echo", argNames: ["data"]);
 
   @override
+  Future<LabSigningKey> crateApiGenerateLabSigningKey() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 18,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_lab_signing_key,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiGenerateLabSigningKeyConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiGenerateLabSigningKeyConstMeta =>
+      const TaskConstMeta(debugName: "generate_lab_signing_key", argNames: []);
+
+  @override
   NoiseKeypair crateApiGenerateNoiseStaticKeypair() {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 11)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 19)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_noise_keypair,
@@ -493,7 +862,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_u_32(n, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 20)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_u_32,
@@ -517,6 +886,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   get rust_arc_decrement_strong_count_NoiseSession => wire
       .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNoiseSession;
 
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_PayerTxEngine => wire
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPayerTxEngine;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_PayerTxEngine => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPayerTxEngine;
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_ReceiverTxEngine => wire
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReceiverTxEngine;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_ReceiverTxEngine => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReceiverTxEngine;
+
   @protected
   NoiseSession
   dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNoiseSession(
@@ -524,6 +909,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return NoiseSessionImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  PayerTxEngine
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPayerTxEngine(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return PayerTxEngineImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  ReceiverTxEngine
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReceiverTxEngine(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return ReceiverTxEngineImpl.frbInternalDcoDecode(raw as List<dynamic>);
   }
 
   @protected
@@ -545,12 +948,48 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PayerTxEngine
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPayerTxEngine(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return PayerTxEngineImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  ReceiverTxEngine
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReceiverTxEngine(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return ReceiverTxEngineImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
   NoiseSession
   dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNoiseSession(
     dynamic raw,
   ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return NoiseSessionImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  PayerTxEngine
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPayerTxEngine(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return PayerTxEngineImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  ReceiverTxEngine
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReceiverTxEngine(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return ReceiverTxEngineImpl.frbInternalDcoDecode(raw as List<dynamic>);
   }
 
   @protected
@@ -579,6 +1018,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       rustVersion: dco_decode_String(arr[4]),
       elapsedMicros: dco_decode_u_64(arr[5]),
     );
+  }
+
+  @protected
+  LabSigningKey dco_decode_lab_signing_key(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return LabSigningKey(
+      seed: dco_decode_list_prim_u_8_strict(arr[0]),
+      publicKey: dco_decode_list_prim_u_8_strict(arr[1]),
+    );
+  }
+
+  @protected
+  List<Uint8List> dco_decode_list_list_prim_u_8_strict(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_list_prim_u_8_strict).toList();
   }
 
   @protected
@@ -648,6 +1105,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PayerTxEngine
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPayerTxEngine(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return PayerTxEngineImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  ReceiverTxEngine
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReceiverTxEngine(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return ReceiverTxEngineImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
   NoiseSession
   sse_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNoiseSession(
     SseDeserializer deserializer,
@@ -672,12 +1153,60 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PayerTxEngine
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPayerTxEngine(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return PayerTxEngineImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  ReceiverTxEngine
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReceiverTxEngine(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return ReceiverTxEngineImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
   NoiseSession
   sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNoiseSession(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return NoiseSessionImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  PayerTxEngine
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPayerTxEngine(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return PayerTxEngineImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  ReceiverTxEngine
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReceiverTxEngine(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return ReceiverTxEngineImpl.frbInternalSseDecode(
       sse_decode_usize(deserializer),
       sse_decode_i_32(deserializer),
     );
@@ -713,6 +1242,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       rustVersion: var_rustVersion,
       elapsedMicros: var_elapsedMicros,
     );
+  }
+
+  @protected
+  LabSigningKey sse_decode_lab_signing_key(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_seed = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_publicKey = sse_decode_list_prim_u_8_strict(deserializer);
+    return LabSigningKey(seed: var_seed, publicKey: var_publicKey);
+  }
+
+  @protected
+  List<Uint8List> sse_decode_list_list_prim_u_8_strict(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <Uint8List>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_list_prim_u_8_strict(deserializer));
+    }
+    return ans_;
   }
 
   @protected
@@ -787,6 +1338,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @protected
   void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPayerTxEngine(
+    PayerTxEngine self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as PayerTxEngineImpl).frbInternalSseEncode(move: true),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReceiverTxEngine(
+    ReceiverTxEngine self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as ReceiverTxEngineImpl).frbInternalSseEncode(move: true),
+      serializer,
+    );
+  }
+
+  @protected
+  void
   sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNoiseSession(
     NoiseSession self,
     SseSerializer serializer,
@@ -813,6 +1390,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @protected
   void
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPayerTxEngine(
+    PayerTxEngine self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as PayerTxEngineImpl).frbInternalSseEncode(move: false),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReceiverTxEngine(
+    ReceiverTxEngine self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as ReceiverTxEngineImpl).frbInternalSseEncode(move: false),
+      serializer,
+    );
+  }
+
+  @protected
+  void
   sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNoiseSession(
     NoiseSession self,
     SseSerializer serializer,
@@ -820,6 +1423,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_usize(
       (self as NoiseSessionImpl).frbInternalSseEncode(move: null),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPayerTxEngine(
+    PayerTxEngine self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as PayerTxEngineImpl).frbInternalSseEncode(move: null),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReceiverTxEngine(
+    ReceiverTxEngine self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as ReceiverTxEngineImpl).frbInternalSseEncode(move: null),
       serializer,
     );
   }
@@ -845,6 +1474,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.p256SignVerifyOk, serializer);
     sse_encode_String(self.rustVersion, serializer);
     sse_encode_u_64(self.elapsedMicros, serializer);
+  }
+
+  @protected
+  void sse_encode_lab_signing_key(
+    LabSigningKey self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_prim_u_8_strict(self.seed, serializer);
+    sse_encode_list_prim_u_8_strict(self.publicKey, serializer);
+  }
+
+  @protected
+  void sse_encode_list_list_prim_u_8_strict(
+    List<Uint8List> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_list_prim_u_8_strict(item, serializer);
+    }
   }
 
   @protected
@@ -953,4 +1604,83 @@ class NoiseSessionImpl extends RustOpaque implements NoiseSession {
       .instance
       .api
       .crateApiNoiseSessionWriteMessage(that: this, payload: payload);
+}
+
+@sealed
+class PayerTxEngineImpl extends RustOpaque implements PayerTxEngine {
+  // Not to be used by end users
+  PayerTxEngineImpl.frbInternalDcoDecode(List<dynamic> wire)
+    : super.frbInternalDcoDecode(wire, _kStaticData);
+
+  // Not to be used by end users
+  PayerTxEngineImpl.frbInternalSseDecode(BigInt ptr, int externalSizeOnNative)
+    : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
+
+  static final _kStaticData = RustArcStaticData(
+    rustArcIncrementStrongCount:
+        RustLib.instance.api.rust_arc_increment_strong_count_PayerTxEngine,
+    rustArcDecrementStrongCount:
+        RustLib.instance.api.rust_arc_decrement_strong_count_PayerTxEngine,
+    rustArcDecrementStrongCountPtr:
+        RustLib.instance.api.rust_arc_decrement_strong_count_PayerTxEnginePtr,
+  );
+
+  /// Expires still-locked cheques signed at least `expiry_secs` before `now_unix`; returns the count.
+  Future<int> expireLocked({
+    required BigInt nowUnix,
+    required BigInt expirySecs,
+  }) => RustLib.instance.api.crateApiPayerTxEngineExpireLocked(
+    that: this,
+    nowUnix: nowUnix,
+    expirySecs: expirySecs,
+  );
+
+  Future<void> onAck({required List<int> ack}) =>
+      RustLib.instance.api.crateApiPayerTxEngineOnAck(that: this, ack: ack);
+
+  /// Returns the `TxPropose` bytes to send, only after intent and LOCKED_OUTGOING are durable.
+  Future<Uint8List> propose({
+    required List<int> spendBody,
+    required BigInt counter,
+    required List<int> recipientId,
+  }) => RustLib.instance.api.crateApiPayerTxEnginePropose(
+    that: this,
+    spendBody: spendBody,
+    counter: counter,
+    recipientId: recipientId,
+  );
+
+  /// Stored `TxPropose` bytes of every still-locked cheque, for byte-identical redelivery.
+  Future<List<Uint8List>> resumePending() =>
+      RustLib.instance.api.crateApiPayerTxEngineResumePending(that: this);
+}
+
+@sealed
+class ReceiverTxEngineImpl extends RustOpaque implements ReceiverTxEngine {
+  // Not to be used by end users
+  ReceiverTxEngineImpl.frbInternalDcoDecode(List<dynamic> wire)
+    : super.frbInternalDcoDecode(wire, _kStaticData);
+
+  // Not to be used by end users
+  ReceiverTxEngineImpl.frbInternalSseDecode(
+    BigInt ptr,
+    int externalSizeOnNative,
+  ) : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
+
+  static final _kStaticData = RustArcStaticData(
+    rustArcIncrementStrongCount:
+        RustLib.instance.api.rust_arc_increment_strong_count_ReceiverTxEngine,
+    rustArcDecrementStrongCount:
+        RustLib.instance.api.rust_arc_decrement_strong_count_ReceiverTxEngine,
+    rustArcDecrementStrongCountPtr: RustLib
+        .instance
+        .api
+        .rust_arc_decrement_strong_count_ReceiverTxEnginePtr,
+  );
+
+  /// Returns the `AckReceipt` bytes; the same propose twice returns the same ack.
+  Future<Uint8List> onPropose({required List<int> propose}) => RustLib
+      .instance
+      .api
+      .crateApiReceiverTxEngineOnPropose(that: this, propose: propose);
 }

@@ -910,13 +910,16 @@ name = "meshpay_core"
 version = "0.1.0"
 dependencies = [
  "flutter_rust_bridge",
+ "getrandom 0.4.3",
  "p256",
  "prost",
  "rusqlite",
  "rustc_version_runtime",
  "serde_json",
+ "sha2 0.11.1",
  "snow",
  "tempfile",
+ "zeroize",
 ]
 
 [[package]]

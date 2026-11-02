@@ -1,3 +1,6 @@
+use crate::payer_tx_engine::PayerEngine;
+use crate::receiver_tx_engine::ReceiverEngine;
+use crate::tx_keys::{compressed_public_key, signing_key_from_seed};
 use flutter_rust_bridge::frb;
 use p256::ecdsa::{
   Signature, SigningKey,
@@ -10,6 +13,7 @@ use std::io;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
+use zeroize::Zeroizing;
 
 #[frb(sync)]
 pub fn core_version() -> String {
@@ -363,6 +367,106 @@ fn run_p256_selfcheck() -> bool {
     .verifying_key()
     .verify(MESSAGE, &signature)
     .is_ok()
+}
+
+/// LAB ONLY (TEST unit, no real value): software P-256 key for the two-phase commit engines.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LabSigningKey {
+  pub seed: Vec<u8>,
+  pub public_key: Vec<u8>,
+}
+
+pub fn generate_lab_signing_key() -> Result<LabSigningKey, String> {
+  let mut seed = Zeroizing::new([0u8; 32]);
+  // A seed outside [1, n-1] is astronomically unlikely, but retry instead of failing.
+  loop {
+    getrandom::fill(&mut *seed).map_err(|error| format!("random: {error}"))?;
+    if let Ok(signing_key) = signing_key_from_seed(&*seed) {
+      return Ok(LabSigningKey {
+        seed: seed.to_vec(),
+        public_key: compressed_public_key(&signing_key),
+      });
+    }
+  }
+}
+
+/// Payer side of the two-phase commit (PRD 6.5). All messages are protobuf bytes.
+pub struct PayerTxEngine {
+  engine: PayerEngine,
+}
+
+impl PayerTxEngine {
+  /// `db_key` is the raw 32-byte SQLCipher key; `payee_public_key` is a compressed P-256 key.
+  pub fn open(
+    db_path: String,
+    db_key: Vec<u8>,
+    signing_seed: Vec<u8>,
+    payee_public_key: Vec<u8>,
+  ) -> Result<PayerTxEngine, String> {
+    Ok(PayerTxEngine {
+      engine: PayerEngine::open(
+        Path::new(&db_path),
+        &db_key,
+        &signing_seed,
+        &payee_public_key,
+      )?,
+    })
+  }
+
+  /// Returns the `TxPropose` bytes to send, only after intent and LOCKED_OUTGOING are durable.
+  pub fn propose(
+    &self,
+    spend_body: Vec<u8>,
+    counter: u64,
+    recipient_id: Vec<u8>,
+  ) -> Result<Vec<u8>, String> {
+    self.engine.propose(&spend_body, counter, &recipient_id)
+  }
+
+  pub fn on_ack(&self, ack: Vec<u8>) -> Result<(), String> {
+    self.engine.on_ack(&ack)
+  }
+
+  /// Expires still-locked cheques signed at least `expiry_secs` before `now_unix`; returns the count.
+  pub fn expire_locked(&self, now_unix: u64, expiry_secs: u64) -> Result<u32, String> {
+    let expired = self.engine.expire_locked(now_unix, expiry_secs)?;
+    Ok(u32::try_from(expired).unwrap_or(u32::MAX))
+  }
+
+  /// Stored `TxPropose` bytes of every still-locked cheque, for byte-identical redelivery.
+  pub fn resume_pending(&self) -> Result<Vec<Vec<u8>>, String> {
+    self.engine.resume_pending()
+  }
+}
+
+/// Receiver side of the two-phase commit (PRD 6.5).
+pub struct ReceiverTxEngine {
+  engine: ReceiverEngine,
+}
+
+impl ReceiverTxEngine {
+  pub fn open(
+    db_path: String,
+    db_key: Vec<u8>,
+    signing_seed: Vec<u8>,
+    payer_public_key: Vec<u8>,
+    own_account_id: Vec<u8>,
+  ) -> Result<ReceiverTxEngine, String> {
+    Ok(ReceiverTxEngine {
+      engine: ReceiverEngine::open(
+        Path::new(&db_path),
+        &db_key,
+        &signing_seed,
+        &payer_public_key,
+        &own_account_id,
+      )?,
+    })
+  }
+
+  /// Returns the `AckReceipt` bytes; the same propose twice returns the same ack.
+  pub fn on_propose(&self, propose: Vec<u8>) -> Result<Vec<u8>, String> {
+    self.engine.on_propose(&propose)
+  }
 }
 
 #[cfg(test)]
