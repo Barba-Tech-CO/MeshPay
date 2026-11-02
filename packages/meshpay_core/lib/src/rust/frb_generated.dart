@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 1586540694;
+  int get rustContentHash => 63352856;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -79,6 +79,45 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
+  Future<List<Uint8List>> crateApiDtnBufferEnvelopesFor({
+    required DtnBuffer that,
+    required List<Uint8List> ids,
+  });
+
+  Future<BigInt> crateApiDtnBufferIngestSnapshot({
+    required DtnBuffer that,
+    required List<int> snapshot,
+  });
+
+  Future<List<Uint8List>> crateApiDtnBufferMissingFrom({
+    required DtnBuffer that,
+    required List<Uint8List> peerSummary,
+  });
+
+  Future<DtnBuffer> crateApiDtnBufferOpen({
+    required String dbPath,
+    required List<int> dbKey,
+    required List<int> snapshotPublicKey,
+    required int maxIngestPerMinute,
+  });
+
+  DtnSession crateApiDtnBufferOpenSession({required DtnBuffer that});
+
+  Future<Uint8List?> crateApiDtnBufferSnapshotBytes({required DtnBuffer that});
+
+  Future<List<Uint8List>> crateApiDtnBufferSummary({required DtnBuffer that});
+
+  Future<int> crateApiDtnBufferSweep({
+    required DtnBuffer that,
+    required BigInt nowUnix,
+  });
+
+  Future<bool> crateApiDtnSessionIngest({
+    required DtnSession that,
+    required List<int> envelope,
+    required BigInt nowUnix,
+  });
+
   Future<Uint8List> crateApiNoiseSessionDecrypt({
     required NoiseSession that,
     required List<int> ciphertext,
@@ -153,6 +192,13 @@ abstract class RustLibApi extends BaseApi {
     required List<int> ownAccountId,
   });
 
+  Uint8List crateApiBuildDtnEnvelope({
+    required List<int> encryptedServerBatch,
+    required BigInt createdAtUnix,
+    required int ttlHops,
+    required BigInt knownRevocationVersion,
+  });
+
   Future<CoreSelfcheck> crateApiCoreSelfcheck({required String storageDir});
 
   String crateApiCoreVersion();
@@ -164,6 +210,22 @@ abstract class RustLibApi extends BaseApi {
   NoiseKeypair crateApiGenerateNoiseStaticKeypair();
 
   int crateApiPing({required int n});
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_DtnBuffer;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_DtnBuffer;
+
+  CrossPlatformFinalizerArg get rust_arc_decrement_strong_count_DtnBufferPtr;
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_DtnSession;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_DtnSession;
+
+  CrossPlatformFinalizerArg get rust_arc_decrement_strong_count_DtnSessionPtr;
 
   RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_NoiseSession;
@@ -201,6 +263,330 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   });
 
   @override
+  Future<List<Uint8List>> crateApiDtnBufferEnvelopesFor({
+    required DtnBuffer that,
+    required List<Uint8List> ids,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnBuffer(
+            that,
+            serializer,
+          );
+          sse_encode_list_list_prim_u_8_strict(ids, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 1,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_list_prim_u_8_strict,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiDtnBufferEnvelopesForConstMeta,
+        argValues: [that, ids],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiDtnBufferEnvelopesForConstMeta =>
+      const TaskConstMeta(
+        debugName: "DtnBuffer_envelopes_for",
+        argNames: ["that", "ids"],
+      );
+
+  @override
+  Future<BigInt> crateApiDtnBufferIngestSnapshot({
+    required DtnBuffer that,
+    required List<int> snapshot,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnBuffer(
+            that,
+            serializer,
+          );
+          sse_encode_list_prim_u_8_loose(snapshot, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 2,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_64,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiDtnBufferIngestSnapshotConstMeta,
+        argValues: [that, snapshot],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiDtnBufferIngestSnapshotConstMeta =>
+      const TaskConstMeta(
+        debugName: "DtnBuffer_ingest_snapshot",
+        argNames: ["that", "snapshot"],
+      );
+
+  @override
+  Future<List<Uint8List>> crateApiDtnBufferMissingFrom({
+    required DtnBuffer that,
+    required List<Uint8List> peerSummary,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnBuffer(
+            that,
+            serializer,
+          );
+          sse_encode_list_list_prim_u_8_strict(peerSummary, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 3,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_list_prim_u_8_strict,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiDtnBufferMissingFromConstMeta,
+        argValues: [that, peerSummary],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiDtnBufferMissingFromConstMeta =>
+      const TaskConstMeta(
+        debugName: "DtnBuffer_missing_from",
+        argNames: ["that", "peerSummary"],
+      );
+
+  @override
+  Future<DtnBuffer> crateApiDtnBufferOpen({
+    required String dbPath,
+    required List<int> dbKey,
+    required List<int> snapshotPublicKey,
+    required int maxIngestPerMinute,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dbPath, serializer);
+          sse_encode_list_prim_u_8_loose(dbKey, serializer);
+          sse_encode_list_prim_u_8_loose(snapshotPublicKey, serializer);
+          sse_encode_u_32(maxIngestPerMinute, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 4,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData:
+              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnBuffer,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiDtnBufferOpenConstMeta,
+        argValues: [dbPath, dbKey, snapshotPublicKey, maxIngestPerMinute],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiDtnBufferOpenConstMeta => const TaskConstMeta(
+    debugName: "DtnBuffer_open",
+    argNames: ["dbPath", "dbKey", "snapshotPublicKey", "maxIngestPerMinute"],
+  );
+
+  @override
+  DtnSession crateApiDtnBufferOpenSession({required DtnBuffer that}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnBuffer(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData:
+              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnSession,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiDtnBufferOpenSessionConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiDtnBufferOpenSessionConstMeta =>
+      const TaskConstMeta(
+        debugName: "DtnBuffer_open_session",
+        argNames: ["that"],
+      );
+
+  @override
+  Future<Uint8List?> crateApiDtnBufferSnapshotBytes({required DtnBuffer that}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnBuffer(
+            that,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 6,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_opt_list_prim_u_8_strict,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiDtnBufferSnapshotBytesConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiDtnBufferSnapshotBytesConstMeta =>
+      const TaskConstMeta(
+        debugName: "DtnBuffer_snapshot_bytes",
+        argNames: ["that"],
+      );
+
+  @override
+  Future<List<Uint8List>> crateApiDtnBufferSummary({required DtnBuffer that}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnBuffer(
+            that,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 7,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_list_prim_u_8_strict,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiDtnBufferSummaryConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiDtnBufferSummaryConstMeta =>
+      const TaskConstMeta(debugName: "DtnBuffer_summary", argNames: ["that"]);
+
+  @override
+  Future<int> crateApiDtnBufferSweep({
+    required DtnBuffer that,
+    required BigInt nowUnix,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnBuffer(
+            that,
+            serializer,
+          );
+          sse_encode_u_64(nowUnix, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 8,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_32,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiDtnBufferSweepConstMeta,
+        argValues: [that, nowUnix],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiDtnBufferSweepConstMeta => const TaskConstMeta(
+    debugName: "DtnBuffer_sweep",
+    argNames: ["that", "nowUnix"],
+  );
+
+  @override
+  Future<bool> crateApiDtnSessionIngest({
+    required DtnSession that,
+    required List<int> envelope,
+    required BigInt nowUnix,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnSession(
+            that,
+            serializer,
+          );
+          sse_encode_list_prim_u_8_loose(envelope, serializer);
+          sse_encode_u_64(nowUnix, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 9,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiDtnSessionIngestConstMeta,
+        argValues: [that, envelope, nowUnix],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiDtnSessionIngestConstMeta => const TaskConstMeta(
+    debugName: "DtnSession_ingest",
+    argNames: ["that", "envelope", "nowUnix"],
+  );
+
+  @override
   Future<Uint8List> crateApiNoiseSessionDecrypt({
     required NoiseSession that,
     required List<int> ciphertext,
@@ -217,7 +603,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 1,
+            funcId: 10,
             port: port_,
           );
         },
@@ -255,7 +641,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 2,
+            funcId: 11,
             port: port_,
           );
         },
@@ -286,7 +672,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
@@ -316,7 +702,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_list_prim_u_8_loose(responderPublicKey, serializer);
           sse_encode_list_prim_u_8_loose(prologue, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 13)!;
         },
         codec: SseCodec(
           decodeSuccessData:
@@ -347,7 +733,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_list_prim_u_8_loose(localPrivateKey, serializer);
           sse_encode_list_prim_u_8_loose(prologue, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 14)!;
         },
         codec: SseCodec(
           decodeSuccessData:
@@ -384,7 +770,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 15,
             port: port_,
           );
         },
@@ -422,7 +808,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 7,
+            funcId: 16,
             port: port_,
           );
         },
@@ -462,7 +848,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 17,
             port: port_,
           );
         },
@@ -500,7 +886,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 18,
             port: port_,
           );
         },
@@ -538,7 +924,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 19,
             port: port_,
           );
         },
@@ -580,7 +966,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 20,
             port: port_,
           );
         },
@@ -616,7 +1002,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 21,
             port: port_,
           );
         },
@@ -654,7 +1040,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 22,
             port: port_,
           );
         },
@@ -695,7 +1081,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 23,
             port: port_,
           );
         },
@@ -724,6 +1110,49 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Uint8List crateApiBuildDtnEnvelope({
+    required List<int> encryptedServerBatch,
+    required BigInt createdAtUnix,
+    required int ttlHops,
+    required BigInt knownRevocationVersion,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_u_8_loose(encryptedServerBatch, serializer);
+          sse_encode_u_64(createdAtUnix, serializer);
+          sse_encode_u_32(ttlHops, serializer);
+          sse_encode_u_64(knownRevocationVersion, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 24)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_u_8_strict,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiBuildDtnEnvelopeConstMeta,
+        argValues: [
+          encryptedServerBatch,
+          createdAtUnix,
+          ttlHops,
+          knownRevocationVersion,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiBuildDtnEnvelopeConstMeta => const TaskConstMeta(
+    debugName: "build_dtn_envelope",
+    argNames: [
+      "encryptedServerBatch",
+      "createdAtUnix",
+      "ttlHops",
+      "knownRevocationVersion",
+    ],
+  );
+
+  @override
   Future<CoreSelfcheck> crateApiCoreSelfcheck({required String storageDir}) {
     return handler.executeNormal(
       NormalTask(
@@ -733,7 +1162,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 25,
             port: port_,
           );
         },
@@ -759,7 +1188,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 26)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -785,7 +1214,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 27,
             port: port_,
           );
         },
@@ -812,7 +1241,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 18,
+            funcId: 28,
             port: port_,
           );
         },
@@ -836,7 +1265,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 19)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 29)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_noise_keypair,
@@ -862,7 +1291,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_u_32(n, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 20)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 30)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_u_32,
@@ -877,6 +1306,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiPingConstMeta =>
       const TaskConstMeta(debugName: "ping", argNames: ["n"]);
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_DtnBuffer => wire
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnBuffer;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_DtnBuffer => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnBuffer;
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_DtnSession => wire
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnSession;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_DtnSession => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnSession;
 
   RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_NoiseSession => wire
@@ -901,6 +1346,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   RustArcDecrementStrongCountFnType
   get rust_arc_decrement_strong_count_ReceiverTxEngine => wire
       .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReceiverTxEngine;
+
+  @protected
+  DtnBuffer
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnBuffer(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return DtnBufferImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  DtnSession
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnSession(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return DtnSessionImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
 
   @protected
   NoiseSession
@@ -939,6 +1402,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  DtnBuffer
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnBuffer(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return DtnBufferImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  DtnSession
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnSession(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return DtnSessionImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
   NoiseSession
   dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNoiseSession(
     dynamic raw,
@@ -963,6 +1444,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return ReceiverTxEngineImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  DtnBuffer
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnBuffer(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return DtnBufferImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  DtnSession
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnSession(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return DtnSessionImpl.frbInternalDcoDecode(raw as List<dynamic>);
   }
 
   @protected
@@ -1063,6 +1562,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_list_prim_u_8_strict(raw);
+  }
+
+  @protected
   int dco_decode_u_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
@@ -1090,6 +1595,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   BigInt dco_decode_usize(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dcoDecodeU64(raw);
+  }
+
+  @protected
+  DtnBuffer
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnBuffer(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return DtnBufferImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  DtnSession
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnSession(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return DtnSessionImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
   }
 
   @protected
@@ -1141,6 +1670,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  DtnBuffer
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnBuffer(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return DtnBufferImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  DtnSession
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnSession(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return DtnSessionImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
   NoiseSession
   sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNoiseSession(
     SseDeserializer deserializer,
@@ -1171,6 +1724,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return ReceiverTxEngineImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  DtnBuffer
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnBuffer(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return DtnBufferImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  DtnSession
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnSession(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return DtnSessionImpl.frbInternalSseDecode(
       sse_decode_usize(deserializer),
       sse_decode_i_32(deserializer),
     );
@@ -1289,6 +1866,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_list_prim_u_8_strict(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   int sse_decode_u_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint32();
@@ -1321,6 +1909,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   int sse_decode_i_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getInt32();
+  }
+
+  @protected
+  void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnBuffer(
+    DtnBuffer self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as DtnBufferImpl).frbInternalSseEncode(move: true),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnSession(
+    DtnSession self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as DtnSessionImpl).frbInternalSseEncode(move: true),
+      serializer,
+    );
   }
 
   @protected
@@ -1377,6 +1991,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @protected
   void
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnBuffer(
+    DtnBuffer self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as DtnBufferImpl).frbInternalSseEncode(move: false),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnSession(
+    DtnSession self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as DtnSessionImpl).frbInternalSseEncode(move: false),
+      serializer,
+    );
+  }
+
+  @protected
+  void
   sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNoiseSession(
     NoiseSession self,
     SseSerializer serializer,
@@ -1410,6 +2050,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_usize(
       (self as ReceiverTxEngineImpl).frbInternalSseEncode(move: false),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnBuffer(
+    DtnBuffer self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as DtnBufferImpl).frbInternalSseEncode(move: null),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnSession(
+    DtnSession self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as DtnSessionImpl).frbInternalSseEncode(move: null),
       serializer,
     );
   }
@@ -1528,6 +2194,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_list_prim_u_8_strict(
+    Uint8List? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_list_prim_u_8_strict(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_u_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint32(self);
@@ -1561,6 +2240,87 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putInt32(self);
   }
+}
+
+@sealed
+class DtnBufferImpl extends RustOpaque implements DtnBuffer {
+  // Not to be used by end users
+  DtnBufferImpl.frbInternalDcoDecode(List<dynamic> wire)
+    : super.frbInternalDcoDecode(wire, _kStaticData);
+
+  // Not to be used by end users
+  DtnBufferImpl.frbInternalSseDecode(BigInt ptr, int externalSizeOnNative)
+    : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
+
+  static final _kStaticData = RustArcStaticData(
+    rustArcIncrementStrongCount:
+        RustLib.instance.api.rust_arc_increment_strong_count_DtnBuffer,
+    rustArcDecrementStrongCount:
+        RustLib.instance.api.rust_arc_decrement_strong_count_DtnBuffer,
+    rustArcDecrementStrongCountPtr:
+        RustLib.instance.api.rust_arc_decrement_strong_count_DtnBufferPtr,
+  );
+
+  /// Envelopes for the first 20 requested ids.
+  Future<List<Uint8List>> envelopesFor({required List<Uint8List> ids}) =>
+      RustLib.instance.api.crateApiDtnBufferEnvelopesFor(that: this, ids: ids);
+
+  /// Stores a `RevocationSnapshot` only if signed by the SNAPSHOT key and newer; returns its version.
+  Future<BigInt> ingestSnapshot({required List<int> snapshot}) => RustLib
+      .instance
+      .api
+      .crateApiDtnBufferIngestSnapshot(that: this, snapshot: snapshot);
+
+  /// Envelopes (bytes, one hop consumed) the peer lacks, at most 20.
+  Future<List<Uint8List>> missingFrom({required List<Uint8List> peerSummary}) =>
+      RustLib.instance.api.crateApiDtnBufferMissingFrom(
+        that: this,
+        peerSummary: peerSummary,
+      );
+
+  /// One session per connected peer; all inbound envelopes go through it (20 per connection).
+  DtnSession openSession() =>
+      RustLib.instance.api.crateApiDtnBufferOpenSession(that: this);
+
+  Future<Uint8List?> snapshotBytes() =>
+      RustLib.instance.api.crateApiDtnBufferSnapshotBytes(that: this);
+
+  /// Held envelope ids (32 bytes each), capped at 256.
+  Future<List<Uint8List>> summary() =>
+      RustLib.instance.api.crateApiDtnBufferSummary(that: this);
+
+  /// Deletes expired envelopes; returns how many.
+  Future<int> sweep({required BigInt nowUnix}) =>
+      RustLib.instance.api.crateApiDtnBufferSweep(that: this, nowUnix: nowUnix);
+}
+
+@sealed
+class DtnSessionImpl extends RustOpaque implements DtnSession {
+  // Not to be used by end users
+  DtnSessionImpl.frbInternalDcoDecode(List<dynamic> wire)
+    : super.frbInternalDcoDecode(wire, _kStaticData);
+
+  // Not to be used by end users
+  DtnSessionImpl.frbInternalSseDecode(BigInt ptr, int externalSizeOnNative)
+    : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
+
+  static final _kStaticData = RustArcStaticData(
+    rustArcIncrementStrongCount:
+        RustLib.instance.api.rust_arc_increment_strong_count_DtnSession,
+    rustArcDecrementStrongCount:
+        RustLib.instance.api.rust_arc_decrement_strong_count_DtnSession,
+    rustArcDecrementStrongCountPtr:
+        RustLib.instance.api.rust_arc_decrement_strong_count_DtnSessionPtr,
+  );
+
+  /// `Ok(true)` stored, `Ok(false)` duplicate; every other outcome (invalid, refused, rate
+  /// limited, session budget used up) is `Err(reason)`.
+  Future<bool> ingest({required List<int> envelope, required BigInt nowUnix}) =>
+      RustLib.instance.api.crateApiDtnSessionIngest(
+        that: this,
+        envelope: envelope,
+        nowUnix: nowUnix,
+      );
 }
 
 @sealed

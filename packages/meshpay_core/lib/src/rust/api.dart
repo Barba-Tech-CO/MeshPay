@@ -28,6 +28,63 @@ Future<CoreSelfcheck> coreSelfcheck({required String storageDir}) =>
 Future<LabSigningKey> generateLabSigningKey() =>
     RustLib.instance.api.crateApiGenerateLabSigningKey();
 
+/// `SyncEnvelope` bytes for `encrypted_server_batch` (opaque to carriers); `envelope_id` is its hash.
+Uint8List buildDtnEnvelope({
+  required List<int> encryptedServerBatch,
+  required BigInt createdAtUnix,
+  required int ttlHops,
+  required BigInt knownRevocationVersion,
+}) => RustLib.instance.api.crateApiBuildDtnEnvelope(
+  encryptedServerBatch: encryptedServerBatch,
+  createdAtUnix: createdAtUnix,
+  ttlHops: ttlHops,
+  knownRevocationVersion: knownRevocationVersion,
+);
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnBuffer>>
+abstract class DtnBuffer implements RustOpaqueInterface {
+  /// Envelopes for the first 20 requested ids.
+  Future<List<Uint8List>> envelopesFor({required List<Uint8List> ids});
+
+  /// Stores a `RevocationSnapshot` only if signed by the SNAPSHOT key and newer; returns its version.
+  Future<BigInt> ingestSnapshot({required List<int> snapshot});
+
+  /// Envelopes (bytes, one hop consumed) the peer lacks, at most 20.
+  Future<List<Uint8List>> missingFrom({required List<Uint8List> peerSummary});
+
+  /// `db_key` is the raw 32-byte SQLCipher key; `snapshot_public_key` is the compressed P-256
+  /// SNAPSHOT role key; `max_ingest_per_minute` is the global ingest rate limit.
+  static Future<DtnBuffer> open({
+    required String dbPath,
+    required List<int> dbKey,
+    required List<int> snapshotPublicKey,
+    required int maxIngestPerMinute,
+  }) => RustLib.instance.api.crateApiDtnBufferOpen(
+    dbPath: dbPath,
+    dbKey: dbKey,
+    snapshotPublicKey: snapshotPublicKey,
+    maxIngestPerMinute: maxIngestPerMinute,
+  );
+
+  /// One session per connected peer; all inbound envelopes go through it (20 per connection).
+  DtnSession openSession();
+
+  Future<Uint8List?> snapshotBytes();
+
+  /// Held envelope ids (32 bytes each), capped at 256.
+  Future<List<Uint8List>> summary();
+
+  /// Deletes expired envelopes; returns how many.
+  Future<int> sweep({required BigInt nowUnix});
+}
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnSession>>
+abstract class DtnSession implements RustOpaqueInterface {
+  /// `Ok(true)` stored, `Ok(false)` duplicate; every other outcome (invalid, refused, rate
+  /// limited, session budget used up) is `Err(reason)`.
+  Future<bool> ingest({required List<int> envelope, required BigInt nowUnix});
+}
+
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<NoiseSession>>
 abstract class NoiseSession implements RustOpaqueInterface {
   Future<Uint8List> decrypt({required List<int> ciphertext});

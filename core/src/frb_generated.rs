@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
   default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1586540694;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 63352856;
 
 // Section: executor
 
@@ -48,6 +48,418 @@ flutter_rust_bridge::frb_generated_default_handler!();
 
 // Section: wire_funcs
 
+fn wire__crate__api__DtnBuffer_envelopes_for_impl(
+  port_: flutter_rust_bridge::for_generated::MessagePort,
+  ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+  rust_vec_len_: i32,
+  data_len_: i32,
+) {
+  FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+    flutter_rust_bridge::for_generated::TaskInfo {
+      debug_name: "DtnBuffer_envelopes_for",
+      port: Some(port_),
+      mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+    },
+    move || {
+      let message = unsafe {
+        flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+          ptr_,
+          rust_vec_len_,
+          data_len_,
+        )
+      };
+      let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+      let api_that = <RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnBuffer>,
+      >>::sse_decode(&mut deserializer);
+      let api_ids = <Vec<Vec<u8>>>::sse_decode(&mut deserializer);
+      deserializer.end();
+      move |context| {
+        transform_result_sse::<_, String>((move || {
+          let mut api_that_guard = None;
+          let decode_indices_ =
+            flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+              flutter_rust_bridge::for_generated::LockableOrderInfo::new(&api_that, 0, false),
+            ]);
+          for i in decode_indices_ {
+            match i {
+              0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+              _ => unreachable!(),
+            }
+          }
+          let api_that_guard = api_that_guard.unwrap();
+          let output_ok = crate::api::DtnBuffer::envelopes_for(&*api_that_guard, api_ids)?;
+          std::result::Result::Ok(output_ok)
+        })())
+      }
+    },
+  )
+}
+fn wire__crate__api__DtnBuffer_ingest_snapshot_impl(
+  port_: flutter_rust_bridge::for_generated::MessagePort,
+  ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+  rust_vec_len_: i32,
+  data_len_: i32,
+) {
+  FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+    flutter_rust_bridge::for_generated::TaskInfo {
+      debug_name: "DtnBuffer_ingest_snapshot",
+      port: Some(port_),
+      mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+    },
+    move || {
+      let message = unsafe {
+        flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+          ptr_,
+          rust_vec_len_,
+          data_len_,
+        )
+      };
+      let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+      let api_that = <RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnBuffer>,
+      >>::sse_decode(&mut deserializer);
+      let api_snapshot = <Vec<u8>>::sse_decode(&mut deserializer);
+      deserializer.end();
+      move |context| {
+        transform_result_sse::<_, String>((move || {
+          let mut api_that_guard = None;
+          let decode_indices_ =
+            flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+              flutter_rust_bridge::for_generated::LockableOrderInfo::new(&api_that, 0, false),
+            ]);
+          for i in decode_indices_ {
+            match i {
+              0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+              _ => unreachable!(),
+            }
+          }
+          let api_that_guard = api_that_guard.unwrap();
+          let output_ok = crate::api::DtnBuffer::ingest_snapshot(&*api_that_guard, api_snapshot)?;
+          std::result::Result::Ok(output_ok)
+        })())
+      }
+    },
+  )
+}
+fn wire__crate__api__DtnBuffer_missing_from_impl(
+  port_: flutter_rust_bridge::for_generated::MessagePort,
+  ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+  rust_vec_len_: i32,
+  data_len_: i32,
+) {
+  FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+    flutter_rust_bridge::for_generated::TaskInfo {
+      debug_name: "DtnBuffer_missing_from",
+      port: Some(port_),
+      mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+    },
+    move || {
+      let message = unsafe {
+        flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+          ptr_,
+          rust_vec_len_,
+          data_len_,
+        )
+      };
+      let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+      let api_that = <RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnBuffer>,
+      >>::sse_decode(&mut deserializer);
+      let api_peer_summary = <Vec<Vec<u8>>>::sse_decode(&mut deserializer);
+      deserializer.end();
+      move |context| {
+        transform_result_sse::<_, String>((move || {
+          let mut api_that_guard = None;
+          let decode_indices_ =
+            flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+              flutter_rust_bridge::for_generated::LockableOrderInfo::new(&api_that, 0, false),
+            ]);
+          for i in decode_indices_ {
+            match i {
+              0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+              _ => unreachable!(),
+            }
+          }
+          let api_that_guard = api_that_guard.unwrap();
+          let output_ok = crate::api::DtnBuffer::missing_from(&*api_that_guard, api_peer_summary)?;
+          std::result::Result::Ok(output_ok)
+        })())
+      }
+    },
+  )
+}
+fn wire__crate__api__DtnBuffer_open_impl(
+  port_: flutter_rust_bridge::for_generated::MessagePort,
+  ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+  rust_vec_len_: i32,
+  data_len_: i32,
+) {
+  FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+    flutter_rust_bridge::for_generated::TaskInfo {
+      debug_name: "DtnBuffer_open",
+      port: Some(port_),
+      mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+    },
+    move || {
+      let message = unsafe {
+        flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+          ptr_,
+          rust_vec_len_,
+          data_len_,
+        )
+      };
+      let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+      let api_db_path = <String>::sse_decode(&mut deserializer);
+      let api_db_key = <Vec<u8>>::sse_decode(&mut deserializer);
+      let api_snapshot_public_key = <Vec<u8>>::sse_decode(&mut deserializer);
+      let api_max_ingest_per_minute = <u32>::sse_decode(&mut deserializer);
+      deserializer.end();
+      move |context| {
+        transform_result_sse::<_, String>((move || {
+          let output_ok = crate::api::DtnBuffer::open(
+            api_db_path,
+            api_db_key,
+            api_snapshot_public_key,
+            api_max_ingest_per_minute,
+          )?;
+          std::result::Result::Ok(output_ok)
+        })())
+      }
+    },
+  )
+}
+fn wire__crate__api__DtnBuffer_open_session_impl(
+  ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+  rust_vec_len_: i32,
+  data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+  FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+    flutter_rust_bridge::for_generated::TaskInfo {
+      debug_name: "DtnBuffer_open_session",
+      port: None,
+      mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+    },
+    move || {
+      let message = unsafe {
+        flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+          ptr_,
+          rust_vec_len_,
+          data_len_,
+        )
+      };
+      let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+      let api_that = <RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnBuffer>,
+      >>::sse_decode(&mut deserializer);
+      deserializer.end();
+      transform_result_sse::<_, ()>((move || {
+        let mut api_that_guard = None;
+        let decode_indices_ =
+          flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+            flutter_rust_bridge::for_generated::LockableOrderInfo::new(&api_that, 0, false),
+          ]);
+        for i in decode_indices_ {
+          match i {
+            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+            _ => unreachable!(),
+          }
+        }
+        let api_that_guard = api_that_guard.unwrap();
+        let output_ok = Ok::<_, ()>(crate::api::DtnBuffer::open_session(&*api_that_guard))?;
+        std::result::Result::Ok(output_ok)
+      })())
+    },
+  )
+}
+fn wire__crate__api__DtnBuffer_snapshot_bytes_impl(
+  port_: flutter_rust_bridge::for_generated::MessagePort,
+  ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+  rust_vec_len_: i32,
+  data_len_: i32,
+) {
+  FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+    flutter_rust_bridge::for_generated::TaskInfo {
+      debug_name: "DtnBuffer_snapshot_bytes",
+      port: Some(port_),
+      mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+    },
+    move || {
+      let message = unsafe {
+        flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+          ptr_,
+          rust_vec_len_,
+          data_len_,
+        )
+      };
+      let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+      let api_that = <RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnBuffer>,
+      >>::sse_decode(&mut deserializer);
+      deserializer.end();
+      move |context| {
+        transform_result_sse::<_, String>((move || {
+          let mut api_that_guard = None;
+          let decode_indices_ =
+            flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+              flutter_rust_bridge::for_generated::LockableOrderInfo::new(&api_that, 0, false),
+            ]);
+          for i in decode_indices_ {
+            match i {
+              0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+              _ => unreachable!(),
+            }
+          }
+          let api_that_guard = api_that_guard.unwrap();
+          let output_ok = crate::api::DtnBuffer::snapshot_bytes(&*api_that_guard)?;
+          std::result::Result::Ok(output_ok)
+        })())
+      }
+    },
+  )
+}
+fn wire__crate__api__DtnBuffer_summary_impl(
+  port_: flutter_rust_bridge::for_generated::MessagePort,
+  ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+  rust_vec_len_: i32,
+  data_len_: i32,
+) {
+  FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+    flutter_rust_bridge::for_generated::TaskInfo {
+      debug_name: "DtnBuffer_summary",
+      port: Some(port_),
+      mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+    },
+    move || {
+      let message = unsafe {
+        flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+          ptr_,
+          rust_vec_len_,
+          data_len_,
+        )
+      };
+      let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+      let api_that = <RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnBuffer>,
+      >>::sse_decode(&mut deserializer);
+      deserializer.end();
+      move |context| {
+        transform_result_sse::<_, String>((move || {
+          let mut api_that_guard = None;
+          let decode_indices_ =
+            flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+              flutter_rust_bridge::for_generated::LockableOrderInfo::new(&api_that, 0, false),
+            ]);
+          for i in decode_indices_ {
+            match i {
+              0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+              _ => unreachable!(),
+            }
+          }
+          let api_that_guard = api_that_guard.unwrap();
+          let output_ok = crate::api::DtnBuffer::summary(&*api_that_guard)?;
+          std::result::Result::Ok(output_ok)
+        })())
+      }
+    },
+  )
+}
+fn wire__crate__api__DtnBuffer_sweep_impl(
+  port_: flutter_rust_bridge::for_generated::MessagePort,
+  ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+  rust_vec_len_: i32,
+  data_len_: i32,
+) {
+  FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+    flutter_rust_bridge::for_generated::TaskInfo {
+      debug_name: "DtnBuffer_sweep",
+      port: Some(port_),
+      mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+    },
+    move || {
+      let message = unsafe {
+        flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+          ptr_,
+          rust_vec_len_,
+          data_len_,
+        )
+      };
+      let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+      let api_that = <RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnBuffer>,
+      >>::sse_decode(&mut deserializer);
+      let api_now_unix = <u64>::sse_decode(&mut deserializer);
+      deserializer.end();
+      move |context| {
+        transform_result_sse::<_, String>((move || {
+          let mut api_that_guard = None;
+          let decode_indices_ =
+            flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+              flutter_rust_bridge::for_generated::LockableOrderInfo::new(&api_that, 0, false),
+            ]);
+          for i in decode_indices_ {
+            match i {
+              0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+              _ => unreachable!(),
+            }
+          }
+          let api_that_guard = api_that_guard.unwrap();
+          let output_ok = crate::api::DtnBuffer::sweep(&*api_that_guard, api_now_unix)?;
+          std::result::Result::Ok(output_ok)
+        })())
+      }
+    },
+  )
+}
+fn wire__crate__api__DtnSession_ingest_impl(
+  port_: flutter_rust_bridge::for_generated::MessagePort,
+  ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+  rust_vec_len_: i32,
+  data_len_: i32,
+) {
+  FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+    flutter_rust_bridge::for_generated::TaskInfo {
+      debug_name: "DtnSession_ingest",
+      port: Some(port_),
+      mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+    },
+    move || {
+      let message = unsafe {
+        flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+          ptr_,
+          rust_vec_len_,
+          data_len_,
+        )
+      };
+      let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+      let api_that = <RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnSession>,
+      >>::sse_decode(&mut deserializer);
+      let api_envelope = <Vec<u8>>::sse_decode(&mut deserializer);
+      let api_now_unix = <u64>::sse_decode(&mut deserializer);
+      deserializer.end();
+      move |context| {
+        transform_result_sse::<_, String>((move || {
+          let mut api_that_guard = None;
+          let decode_indices_ =
+            flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+              flutter_rust_bridge::for_generated::LockableOrderInfo::new(&api_that, 0, false),
+            ]);
+          for i in decode_indices_ {
+            match i {
+              0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+              _ => unreachable!(),
+            }
+          }
+          let api_that_guard = api_that_guard.unwrap();
+          let output_ok =
+            crate::api::DtnSession::ingest(&*api_that_guard, api_envelope, api_now_unix)?;
+          std::result::Result::Ok(output_ok)
+        })())
+      }
+    },
+  )
+}
 fn wire__crate__api__NoiseSession_decrypt_impl(
   port_: flutter_rust_bridge::for_generated::MessagePort,
   ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -671,6 +1083,43 @@ fn wire__crate__api__ReceiverTxEngine_open_impl(
     },
   )
 }
+fn wire__crate__api__build_dtn_envelope_impl(
+  ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+  rust_vec_len_: i32,
+  data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+  FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+    flutter_rust_bridge::for_generated::TaskInfo {
+      debug_name: "build_dtn_envelope",
+      port: None,
+      mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+    },
+    move || {
+      let message = unsafe {
+        flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+          ptr_,
+          rust_vec_len_,
+          data_len_,
+        )
+      };
+      let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+      let api_encrypted_server_batch = <Vec<u8>>::sse_decode(&mut deserializer);
+      let api_created_at_unix = <u64>::sse_decode(&mut deserializer);
+      let api_ttl_hops = <u32>::sse_decode(&mut deserializer);
+      let api_known_revocation_version = <u64>::sse_decode(&mut deserializer);
+      deserializer.end();
+      transform_result_sse::<_, ()>((move || {
+        let output_ok = Ok::<_, ()>(crate::api::build_dtn_envelope(
+          api_encrypted_server_batch,
+          api_created_at_unix,
+          api_ttl_hops,
+          api_known_revocation_version,
+        ))?;
+        std::result::Result::Ok(output_ok)
+      })())
+    },
+  )
+}
 fn wire__crate__api__core_selfcheck_impl(
   port_: flutter_rust_bridge::for_generated::MessagePort,
   ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -855,6 +1304,12 @@ fn wire__crate__api__ping_impl(
 // Section: related_funcs
 
 flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
+  flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnBuffer>
+);
+flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
+  flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnSession>
+);
+flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
   flutter_rust_bridge::for_generated::RustAutoOpaqueInner<NoiseSession>
 );
 flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
@@ -865,6 +1320,26 @@ flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
 );
 
 // Section: dart2rust
+
+impl SseDecode for DtnBuffer {
+  // Codec=Sse (Serialization based), see doc to use other codecs
+  fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+    let mut inner = <RustOpaqueMoi<
+      flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnBuffer>,
+    >>::sse_decode(deserializer);
+    return flutter_rust_bridge::for_generated::rust_auto_opaque_decode_owned(inner);
+  }
+}
+
+impl SseDecode for DtnSession {
+  // Codec=Sse (Serialization based), see doc to use other codecs
+  fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+    let mut inner = <RustOpaqueMoi<
+      flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnSession>,
+    >>::sse_decode(deserializer);
+    return flutter_rust_bridge::for_generated::rust_auto_opaque_decode_owned(inner);
+  }
+}
 
 impl SseDecode for NoiseSession {
   // Codec=Sse (Serialization based), see doc to use other codecs
@@ -893,6 +1368,26 @@ impl SseDecode for ReceiverTxEngine {
       flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ReceiverTxEngine>,
     >>::sse_decode(deserializer);
     return flutter_rust_bridge::for_generated::rust_auto_opaque_decode_owned(inner);
+  }
+}
+
+impl SseDecode
+  for RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnBuffer>>
+{
+  // Codec=Sse (Serialization based), see doc to use other codecs
+  fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+    let mut inner = <usize>::sse_decode(deserializer);
+    return decode_rust_opaque_moi(inner);
+  }
+}
+
+impl SseDecode
+  for RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnSession>>
+{
+  // Codec=Sse (Serialization based), see doc to use other codecs
+  fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+    let mut inner = <usize>::sse_decode(deserializer);
+    return decode_rust_opaque_moi(inner);
   }
 }
 
@@ -1009,6 +1504,17 @@ impl SseDecode for crate::api::NoiseKeypair {
   }
 }
 
+impl SseDecode for Option<Vec<u8>> {
+  // Codec=Sse (Serialization based), see doc to use other codecs
+  fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+    if (<bool>::sse_decode(deserializer)) {
+      return Some(<Vec<u8>>::sse_decode(deserializer));
+    } else {
+      return None;
+    }
+  }
+}
+
 impl SseDecode for u32 {
   // Codec=Sse (Serialization based), see doc to use other codecs
   fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1058,20 +1564,28 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
   // Codec=Pde (Serialization + dispatch), see doc to use other codecs
   match func_id {
-    1 => wire__crate__api__NoiseSession_decrypt_impl(port, ptr, rust_vec_len, data_len),
-    2 => wire__crate__api__NoiseSession_encrypt_impl(port, ptr, rust_vec_len, data_len),
-    6 => wire__crate__api__NoiseSession_read_message_impl(port, ptr, rust_vec_len, data_len),
-    7 => wire__crate__api__NoiseSession_write_message_impl(port, ptr, rust_vec_len, data_len),
-    8 => wire__crate__api__PayerTxEngine_expire_locked_impl(port, ptr, rust_vec_len, data_len),
-    9 => wire__crate__api__PayerTxEngine_on_ack_impl(port, ptr, rust_vec_len, data_len),
-    10 => wire__crate__api__PayerTxEngine_open_impl(port, ptr, rust_vec_len, data_len),
-    11 => wire__crate__api__PayerTxEngine_propose_impl(port, ptr, rust_vec_len, data_len),
-    12 => wire__crate__api__PayerTxEngine_resume_pending_impl(port, ptr, rust_vec_len, data_len),
-    13 => wire__crate__api__ReceiverTxEngine_on_propose_impl(port, ptr, rust_vec_len, data_len),
-    14 => wire__crate__api__ReceiverTxEngine_open_impl(port, ptr, rust_vec_len, data_len),
-    15 => wire__crate__api__core_selfcheck_impl(port, ptr, rust_vec_len, data_len),
-    17 => wire__crate__api__echo_impl(port, ptr, rust_vec_len, data_len),
-    18 => wire__crate__api__generate_lab_signing_key_impl(port, ptr, rust_vec_len, data_len),
+    1 => wire__crate__api__DtnBuffer_envelopes_for_impl(port, ptr, rust_vec_len, data_len),
+    2 => wire__crate__api__DtnBuffer_ingest_snapshot_impl(port, ptr, rust_vec_len, data_len),
+    3 => wire__crate__api__DtnBuffer_missing_from_impl(port, ptr, rust_vec_len, data_len),
+    4 => wire__crate__api__DtnBuffer_open_impl(port, ptr, rust_vec_len, data_len),
+    6 => wire__crate__api__DtnBuffer_snapshot_bytes_impl(port, ptr, rust_vec_len, data_len),
+    7 => wire__crate__api__DtnBuffer_summary_impl(port, ptr, rust_vec_len, data_len),
+    8 => wire__crate__api__DtnBuffer_sweep_impl(port, ptr, rust_vec_len, data_len),
+    9 => wire__crate__api__DtnSession_ingest_impl(port, ptr, rust_vec_len, data_len),
+    10 => wire__crate__api__NoiseSession_decrypt_impl(port, ptr, rust_vec_len, data_len),
+    11 => wire__crate__api__NoiseSession_encrypt_impl(port, ptr, rust_vec_len, data_len),
+    15 => wire__crate__api__NoiseSession_read_message_impl(port, ptr, rust_vec_len, data_len),
+    16 => wire__crate__api__NoiseSession_write_message_impl(port, ptr, rust_vec_len, data_len),
+    17 => wire__crate__api__PayerTxEngine_expire_locked_impl(port, ptr, rust_vec_len, data_len),
+    18 => wire__crate__api__PayerTxEngine_on_ack_impl(port, ptr, rust_vec_len, data_len),
+    19 => wire__crate__api__PayerTxEngine_open_impl(port, ptr, rust_vec_len, data_len),
+    20 => wire__crate__api__PayerTxEngine_propose_impl(port, ptr, rust_vec_len, data_len),
+    21 => wire__crate__api__PayerTxEngine_resume_pending_impl(port, ptr, rust_vec_len, data_len),
+    22 => wire__crate__api__ReceiverTxEngine_on_propose_impl(port, ptr, rust_vec_len, data_len),
+    23 => wire__crate__api__ReceiverTxEngine_open_impl(port, ptr, rust_vec_len, data_len),
+    25 => wire__crate__api__core_selfcheck_impl(port, ptr, rust_vec_len, data_len),
+    27 => wire__crate__api__echo_impl(port, ptr, rust_vec_len, data_len),
+    28 => wire__crate__api__generate_lab_signing_key_impl(port, ptr, rust_vec_len, data_len),
     _ => unreachable!(),
   }
 }
@@ -1084,17 +1598,47 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
   // Codec=Pde (Serialization + dispatch), see doc to use other codecs
   match func_id {
-    3 => wire__crate__api__NoiseSession_is_finished_impl(ptr, rust_vec_len, data_len),
-    4 => wire__crate__api__NoiseSession_new_initiator_impl(ptr, rust_vec_len, data_len),
-    5 => wire__crate__api__NoiseSession_new_responder_impl(ptr, rust_vec_len, data_len),
-    16 => wire__crate__api__core_version_impl(ptr, rust_vec_len, data_len),
-    19 => wire__crate__api__generate_noise_static_keypair_impl(ptr, rust_vec_len, data_len),
-    20 => wire__crate__api__ping_impl(ptr, rust_vec_len, data_len),
+    5 => wire__crate__api__DtnBuffer_open_session_impl(ptr, rust_vec_len, data_len),
+    12 => wire__crate__api__NoiseSession_is_finished_impl(ptr, rust_vec_len, data_len),
+    13 => wire__crate__api__NoiseSession_new_initiator_impl(ptr, rust_vec_len, data_len),
+    14 => wire__crate__api__NoiseSession_new_responder_impl(ptr, rust_vec_len, data_len),
+    24 => wire__crate__api__build_dtn_envelope_impl(ptr, rust_vec_len, data_len),
+    26 => wire__crate__api__core_version_impl(ptr, rust_vec_len, data_len),
+    29 => wire__crate__api__generate_noise_static_keypair_impl(ptr, rust_vec_len, data_len),
+    30 => wire__crate__api__ping_impl(ptr, rust_vec_len, data_len),
     _ => unreachable!(),
   }
 }
 
 // Section: rust2dart
+
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<DtnBuffer> {
+  fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+    flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self.0).into_dart()
+  }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for FrbWrapper<DtnBuffer> {}
+
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<DtnBuffer>> for DtnBuffer {
+  fn into_into_dart(self) -> FrbWrapper<DtnBuffer> {
+    self.into()
+  }
+}
+
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<DtnSession> {
+  fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+    flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self.0).into_dart()
+  }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for FrbWrapper<DtnSession> {}
+
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<DtnSession>> for DtnSession {
+  fn into_into_dart(self) -> FrbWrapper<DtnSession> {
+    self.into()
+  }
+}
 
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for FrbWrapper<NoiseSession> {
@@ -1194,6 +1738,23 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::NoiseKeypair> for crate::api:
   }
 }
 
+impl SseEncode for DtnBuffer {
+  // Codec=Sse (Serialization based), see doc to use other codecs
+  fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+    <RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnBuffer>>>::sse_encode(
+      flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self),
+      serializer,
+    );
+  }
+}
+
+impl SseEncode for DtnSession {
+  // Codec=Sse (Serialization based), see doc to use other codecs
+  fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+    <RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnSession>>>::sse_encode(flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self), serializer);
+  }
+}
+
 impl SseEncode for NoiseSession {
   // Codec=Sse (Serialization based), see doc to use other codecs
   fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1212,6 +1773,28 @@ impl SseEncode for ReceiverTxEngine {
   // Codec=Sse (Serialization based), see doc to use other codecs
   fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
     <RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ReceiverTxEngine>>>::sse_encode(flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self), serializer);
+  }
+}
+
+impl SseEncode
+  for RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnBuffer>>
+{
+  // Codec=Sse (Serialization based), see doc to use other codecs
+  fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+    let (ptr, size) = self.sse_encode_raw();
+    <usize>::sse_encode(ptr, serializer);
+    <i32>::sse_encode(size, serializer);
+  }
+}
+
+impl SseEncode
+  for RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnSession>>
+{
+  // Codec=Sse (Serialization based), see doc to use other codecs
+  fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+    let (ptr, size) = self.sse_encode_raw();
+    <usize>::sse_encode(ptr, serializer);
+    <i32>::sse_encode(size, serializer);
   }
 }
 
@@ -1310,6 +1893,16 @@ impl SseEncode for crate::api::NoiseKeypair {
   }
 }
 
+impl SseEncode for Option<Vec<u8>> {
+  // Codec=Sse (Serialization based), see doc to use other codecs
+  fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+    <bool>::sse_encode(self.is_some(), serializer);
+    if let Some(value) = self {
+      <Vec<u8>>::sse_encode(value, serializer);
+    }
+  }
+}
+
 impl SseEncode for u32 {
   // Codec=Sse (Serialization based), see doc to use other codecs
   fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1369,6 +1962,34 @@ mod io {
   // Section: boilerplate
 
   flutter_rust_bridge::frb_generated_boilerplate_io!();
+
+  #[unsafe(no_mangle)]
+  pub extern "C" fn frbgen_meshpay_core_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnBuffer(
+    ptr: *const std::ffi::c_void,
+  ) {
+    MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnBuffer>>::increment_strong_count(ptr as _);
+  }
+
+  #[unsafe(no_mangle)]
+  pub extern "C" fn frbgen_meshpay_core_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnBuffer(
+    ptr: *const std::ffi::c_void,
+  ) {
+    MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnBuffer>>::decrement_strong_count(ptr as _);
+  }
+
+  #[unsafe(no_mangle)]
+  pub extern "C" fn frbgen_meshpay_core_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnSession(
+    ptr: *const std::ffi::c_void,
+  ) {
+    MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnSession>>::increment_strong_count(ptr as _);
+  }
+
+  #[unsafe(no_mangle)]
+  pub extern "C" fn frbgen_meshpay_core_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnSession(
+    ptr: *const std::ffi::c_void,
+  ) {
+    MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnSession>>::decrement_strong_count(ptr as _);
+  }
 
   #[unsafe(no_mangle)]
   pub extern "C" fn frbgen_meshpay_core_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNoiseSession(
@@ -1434,6 +2055,34 @@ mod web {
   // Section: boilerplate
 
   flutter_rust_bridge::frb_generated_boilerplate_web!();
+
+  #[wasm_bindgen]
+  pub fn rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnBuffer(
+    ptr: *const std::ffi::c_void,
+  ) {
+    MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnBuffer>>::increment_strong_count(ptr as _);
+  }
+
+  #[wasm_bindgen]
+  pub fn rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnBuffer(
+    ptr: *const std::ffi::c_void,
+  ) {
+    MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnBuffer>>::decrement_strong_count(ptr as _);
+  }
+
+  #[wasm_bindgen]
+  pub fn rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnSession(
+    ptr: *const std::ffi::c_void,
+  ) {
+    MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnSession>>::increment_strong_count(ptr as _);
+  }
+
+  #[wasm_bindgen]
+  pub fn rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnSession(
+    ptr: *const std::ffi::c_void,
+  ) {
+    MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DtnSession>>::decrement_strong_count(ptr as _);
+  }
 
   #[wasm_bindgen]
   pub fn rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNoiseSession(
