@@ -14,7 +14,12 @@ import '../../../../core/noise/noise_handshake_status.dart';
 import '../../../../core/noise/noise_l2cap_session.dart';
 import '../../../../core/noise/noise_prologue_helper.dart';
 import '../../../../core/noise/noise_service.dart';
+import '../../../../core/tx/lab_frame_helper.dart';
+import '../../../../core/tx/receiver_tx_engine_service.dart';
+import '../../../../core/tx/receiver_tx_lab_session.dart';
+import '../../../../core/tx/tx_lab_state.dart';
 import '../helpers/bluetooth_lab_helper.dart';
+import '../helpers/l2cap_receiver_radio.dart';
 import '../helpers/lab_error_message_helper.dart';
 
 enum L2capReceiverStatus { closed, listening, connected }
@@ -26,6 +31,7 @@ class L2capReceiverLabViewModel extends ChangeNotifier {
     this._nativeService,
     this._permissionService,
     this._noiseService,
+    this._receiverTx,
   ) {
     _eventsSubscription = _nativeService.events.listen(
       handleNativeEvent,
@@ -36,6 +42,7 @@ class L2capReceiverLabViewModel extends ChangeNotifier {
   final NativeLabService _nativeService;
   final PermissionService _permissionService;
   final NoiseService _noiseService;
+  final ReceiverTxEngineService _receiverTx;
   late final StreamSubscription<NativeEvent> _eventsSubscription;
   NoiseL2capSession? _session;
   int? _serverChannelId;
@@ -48,12 +55,19 @@ class L2capReceiverLabViewModel extends ChangeNotifier {
   int receivedMessageCount = 0;
   bool isBusy = false;
   String? error;
-  bool _isAdvertising = false;
-  bool _isListening = false;
+  late final L2capReceiverRadio _radio = L2capReceiverRadio(_nativeService);
   bool _isDisposed = false;
 
-  bool get hasActiveOperations =>
-      _isAdvertising || _isListening || _serverChannelId != null;
+  late final ReceiverTxLabSession _tx = ReceiverTxLabSession(
+    _receiverTx,
+    _notifyIfActive,
+  );
+
+  TxLabState get txState => _tx.state;
+
+  String? get txIdHex => _tx.txIdHex;
+
+  bool get hasActiveOperations => _radio.isActive || _serverChannelId != null;
 
   NoiseHandshakeStatus get handshakeStatus =>
       _session?.status ?? NoiseHandshakeStatus.idle;
@@ -84,6 +98,7 @@ class L2capReceiverLabViewModel extends ChangeNotifier {
     }
     isBusy = true;
     error = null;
+    _tx.reset();
     _notifyIfActive();
 
     if (!await _hasBluetoothPermissions()) {
@@ -98,13 +113,7 @@ class L2capReceiverLabViewModel extends ChangeNotifier {
     final newSessionId = BluetoothLabHelper.createSessionIdHex();
     final newKeypair = _noiseService.generateStaticKeypair();
     try {
-      await _nativeService.startAdvertising(sessionIdHex: newSessionId);
-      _isAdvertising = true;
-      final newPsm = await _nativeService.listenL2cap();
-      _isListening = true;
-      if (newPsm < 1 || newPsm > 65535) {
-        throw StateError('The native service returned an invalid L2CAP PSM.');
-      }
+      final newPsm = await _radio.start(newSessionId);
       sessionIdHex = newSessionId;
       psm = newPsm;
       keyHex = HexHelper.encode(newKeypair.publicKey);
@@ -114,7 +123,7 @@ class L2capReceiverLabViewModel extends ChangeNotifier {
     } on Object catch (failure) {
       newKeypair.privateKey.fillRange(0, newKeypair.privateKey.length, 0);
       final failures = <Object>[failure];
-      await _stopRadio(failures);
+      await _radio.stop(failures);
       status = _statusForActiveChannels();
       error = failures.map(LabErrorMessageHelper.messageFor).join('\n');
     } finally {
@@ -132,7 +141,7 @@ class L2capReceiverLabViewModel extends ChangeNotifier {
     _notifyIfActive();
     final failures = <Object>[];
 
-    await _stopRadio(failures);
+    await _radio.stop(failures);
     final session = _session;
     final channelId = _serverChannelId;
     try {
@@ -168,13 +177,19 @@ class L2capReceiverLabViewModel extends ChangeNotifier {
         if (session != null &&
             !session.isClosed &&
             session.channelId == event.channelId) {
-          _frameQueue = _frameQueue.then(
-            (_) => _processData(session, event.data),
-          );
+          // A failure must not poison the chain: later frames still run.
+          _frameQueue = _frameQueue
+              .then((_) => _processData(session, event.data))
+              .catchError(_recordFrameFailure);
         }
       default:
         break;
     }
+    _notifyIfActive();
+  }
+
+  void _recordFrameFailure(Object failure) {
+    error = LabErrorMessageHelper.messageFor(failure);
     _notifyIfActive();
   }
 
@@ -228,6 +243,7 @@ class L2capReceiverLabViewModel extends ChangeNotifier {
     if (session != null && session.channelId == channelId) {
       final wasInProgress = session.status == NoiseHandshakeStatus.inProgress;
       session.onRemoteClosed();
+      unawaited(_tx.close());
       if (wasInProgress) {
         unawaited(_endCharge());
       }
@@ -250,8 +266,7 @@ class L2capReceiverLabViewModel extends ChangeNotifier {
             await _endCharge();
           }
         } else {
-          await session.echoEncrypted(body);
-          receivedMessageCount++;
+          await _handleFrame(session, body);
         }
         if (session.isClosed) {
           break;
@@ -268,6 +283,23 @@ class L2capReceiverLabViewModel extends ChangeNotifier {
       await _failSession(session, duringHandshake: duringHandshake);
     }
     _notifyIfActive();
+  }
+
+  Future<void> _handleFrame(NoiseL2capSession session, Uint8List body) async {
+    final plaintext = await session.decrypt(body);
+    final frame = LabFrameHelper.decode(plaintext);
+    switch (frame.type) {
+      case LabFrameType.echo:
+        await session.sendEncrypted(plaintext);
+        receivedMessageCount++;
+      case LabFrameType.tx:
+        await _tx.handle(frame.payload, session.sendEncrypted);
+        if (_tx.error case final txError?) {
+          error = txError;
+        }
+      case LabFrameType.error:
+        throw const FormatException('Quadro de erro inesperado.');
+    }
   }
 
   Future<void> _failSession(
@@ -300,31 +332,13 @@ class L2capReceiverLabViewModel extends ChangeNotifier {
     }
   }
 
-  Future<void> _stopRadio(List<Object> failures) async {
-    if (_isListening) {
-      try {
-        await _nativeService.stopListenL2cap();
-        _isListening = false;
-      } on Object catch (failure) {
-        failures.add(failure);
-      }
-    }
-    if (_isAdvertising) {
-      try {
-        await _nativeService.stopAdvertising();
-        _isAdvertising = false;
-      } on Object catch (failure) {
-        failures.add(failure);
-      }
-    }
-  }
-
   Future<void> _endCharge() async {
     if (_staticPrivateKey == null) {
       return;
     }
     final failures = <Object>[];
-    await _stopRadio(failures);
+    await _radio.stop(failures);
+    await _tx.close();
     _clearCharge();
     status = _statusForActiveChannels();
     if (failures.isNotEmpty) {
@@ -351,7 +365,7 @@ class L2capReceiverLabViewModel extends ChangeNotifier {
     if (_serverChannelId != null) {
       return L2capReceiverStatus.connected;
     }
-    return _isListening
+    return _radio.isListening
         ? L2capReceiverStatus.listening
         : L2capReceiverStatus.closed;
   }
@@ -369,13 +383,13 @@ class L2capReceiverLabViewModel extends ChangeNotifier {
     final session = _session;
     final channelId = _serverChannelId;
     final cleanup = <Future<void>>[
-      if (_isListening) _nativeService.stopListenL2cap(),
-      if (_isAdvertising) _nativeService.stopAdvertising(),
+      ..._radio.stopForDispose(),
       if (session != null && !session.isClosed)
         session.close()
       else if (channelId != null)
         _nativeService.closeL2cap(channelId: channelId),
     ];
+    cleanup.add(_tx.close());
     _clearCharge();
     if (cleanup.isNotEmpty) {
       unawaited(

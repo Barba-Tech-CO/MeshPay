@@ -17,8 +17,13 @@ import '../../../../core/noise/noise_handshake_status.dart';
 import '../../../../core/noise/noise_l2cap_session.dart';
 import '../../../../core/noise/noise_prologue_helper.dart';
 import '../../../../core/noise/noise_service.dart';
+import '../../../../core/tx/lab_frame_helper.dart';
+import '../../../../core/tx/payer_tx_engine_service.dart';
+import '../../../../core/tx/payer_tx_lab_flow.dart';
+import '../../../../core/tx/tx_lab_state.dart';
 import '../helpers/bluetooth_lab_helper.dart';
 import '../helpers/l2cap_payer_input_helper.dart';
+import '../helpers/l2cap_payer_scan_session.dart';
 import '../helpers/lab_error_message_helper.dart';
 
 class L2capPayerLabViewModel extends ChangeNotifier {
@@ -26,6 +31,7 @@ class L2capPayerLabViewModel extends ChangeNotifier {
     this._nativeService,
     this._permissionService,
     this._noiseService,
+    this._payerTx,
   ) {
     _eventsSubscription = _nativeService.events.listen(
       handleNativeEvent,
@@ -39,24 +45,40 @@ class L2capPayerLabViewModel extends ChangeNotifier {
   final NativeLabService _nativeService;
   final PermissionService _permissionService;
   final NoiseService _noiseService;
+  final PayerTxEngineService _payerTx;
   late final StreamSubscription<NativeEvent> _eventsSubscription;
+  late final L2capPayerScanSession _scan = L2capPayerScanSession(
+    _nativeService,
+  );
   NoiseL2capSession? _session;
-  List<ScanResultEvent> scanResults = const <ScanResultEvent>[];
+  PayerTxLabFlow? _txFlow;
   String sessionIdHex = '';
   String psm = '';
   String keyHex = '';
   String deviceId = '';
-  String? _scanSessionIdHex;
   String? connectedDeviceId;
-  int successCount = 0;
-  double? p50Milliseconds;
-  double? p95Milliseconds;
+  List<double> echoTimingsMilliseconds = const <double>[];
   List<double> handshakeDurationsMilliseconds = const <double>[];
-  bool isScanning = false;
   bool isConnected = false;
   bool isBusy = false;
   String? error;
   bool _isDisposed = false;
+
+  int get successCount => echoTimingsMilliseconds.length;
+
+  double? get p50Milliseconds =>
+      PercentileHelper.percentileOrNull(echoTimingsMilliseconds, 0.5);
+
+  double? get p95Milliseconds =>
+      PercentileHelper.percentileOrNull(echoTimingsMilliseconds, 0.95);
+
+  TxLabState get txState => _txFlow?.state ?? TxLabState.idle;
+
+  String? get txIdHex => _txFlow?.txIdHex;
+
+  List<ScanResultEvent> get scanResults => _scan.results;
+
+  bool get isScanning => _scan.isScanning;
 
   int? get connectedChannelId => isConnected ? _session?.channelId : null;
 
@@ -127,10 +149,7 @@ class L2capPayerLabViewModel extends ChangeNotifier {
 
     error = null;
     try {
-      await _nativeService.startScan(sessionIdHex: currentSessionId);
-      _scanSessionIdHex = currentSessionId;
-      scanResults = const <ScanResultEvent>[];
-      isScanning = true;
+      await _scan.start(currentSessionId);
     } on Object catch (failure) {
       error = LabErrorMessageHelper.messageFor(failure);
     }
@@ -143,9 +162,7 @@ class L2capPayerLabViewModel extends ChangeNotifier {
     }
     error = null;
     try {
-      await _nativeService.stopScan();
-      isScanning = false;
-      _scanSessionIdHex = null;
+      await _scan.stop();
     } on Object catch (failure) {
       error = LabErrorMessageHelper.messageFor(failure);
     }
@@ -200,9 +217,7 @@ class L2capPayerLabViewModel extends ChangeNotifier {
         ),
       );
       if (isScanning) {
-        await _nativeService.stopScan();
-        isScanning = false;
-        _scanSessionIdHex = null;
+        await _scan.stop();
       }
       final channelId = await _nativeService.openL2cap(
         deviceId: targetDeviceId,
@@ -214,6 +229,12 @@ class L2capPayerLabViewModel extends ChangeNotifier {
         noise: noise,
       );
       _session = session;
+      await _txFlow?.cancel();
+      _txFlow = PayerTxLabFlow(
+        session: session,
+        engine: _payerTx,
+        onChanged: _notifyIfActive,
+      );
       connectedDeviceId = targetDeviceId;
       await _runHandshake(session);
     } on Object catch (failure) {
@@ -225,34 +246,27 @@ class L2capPayerLabViewModel extends ChangeNotifier {
   }
 
   Future<void> runEchoBenchmark() async {
-    final session = _session;
-    if (isBusy ||
-        session == null ||
-        session.isClosed ||
-        !session.isEstablished ||
-        !isConnected ||
-        _isDisposed) {
+    final session = _usableSession;
+    if (session == null) {
       error = 'Conecte-se ao receptor antes de iniciar o eco.';
       _notifyIfActive();
       return;
     }
     isBusy = true;
-    successCount = 0;
-    p50Milliseconds = null;
-    p95Milliseconds = null;
+    echoTimingsMilliseconds = const <double>[];
     error = null;
     _notifyIfActive();
 
-    final body = Uint8List(_echoBodyBytes)..fillRange(0, _echoBodyBytes, 0x5a);
+    final body = LabFrameHelper.encode(
+      LabFrameType.echo,
+      Uint8List(_echoBodyBytes)..fillRange(0, _echoBodyBytes, 0x5a),
+    );
     final result = await session.measureEncryptedEchoes(
       body: body,
       repetitions: _echoRepetitions,
       shouldContinue: () => !_isDisposed && isConnected,
     );
-    final timings = result.timingsMilliseconds;
-    successCount = timings.length;
-    p50Milliseconds = PercentileHelper.percentileOrNull(timings, 0.5);
-    p95Milliseconds = PercentileHelper.percentileOrNull(timings, 0.95);
+    echoTimingsMilliseconds = result.timingsMilliseconds;
     if (result.failure case final failure?) {
       error ??= LabErrorMessageHelper.messageFor(failure);
       await _teardown(session);
@@ -261,11 +275,16 @@ class L2capPayerLabViewModel extends ChangeNotifier {
     _notifyIfActive();
   }
 
+  Future<void> sendTestCheque() => _runTx((flow) => flow.sendCheque());
+
+  Future<void> resendPending() => _runTx((flow) => flow.resendPending());
+
   Future<void> close() async {
     final session = _session;
     if (session == null) {
       return;
     }
+    await _txFlow?.cancel();
     await _teardown(session);
     _notifyIfActive();
   }
@@ -273,7 +292,7 @@ class L2capPayerLabViewModel extends ChangeNotifier {
   void handleNativeEvent(NativeEvent event) {
     switch (event) {
       case ScanResultEvent():
-        _recordScanResult(event);
+        _scan.record(event);
       case L2capOpenedEvent():
         break;
       case L2capDataEvent():
@@ -295,6 +314,39 @@ class L2capPayerLabViewModel extends ChangeNotifier {
 
   void handleNativeStreamError(Object failure) {
     error = LabErrorMessageHelper.messageFor(failure);
+    _notifyIfActive();
+  }
+
+  /// The established, open session when nothing else is running.
+  NoiseL2capSession? get _usableSession {
+    final session = _session;
+    final isUsable =
+        !isBusy &&
+        isConnected &&
+        !_isDisposed &&
+        session != null &&
+        !session.isClosed &&
+        session.isEstablished;
+    return isUsable ? session : null;
+  }
+
+  Future<void> _runTx(Future<bool> Function(PayerTxLabFlow flow) action) async {
+    final session = _usableSession;
+    final flow = _txFlow;
+    if (session == null || flow == null) {
+      error = 'Conecte-se ao receptor antes de enviar o cheque.';
+      _notifyIfActive();
+      return;
+    }
+    isBusy = true;
+    error = null;
+    _notifyIfActive();
+    final linkLost = await action(flow);
+    error = flow.error;
+    if (linkLost) {
+      await _teardown(session);
+    }
+    isBusy = false;
     _notifyIfActive();
   }
 
@@ -323,16 +375,6 @@ class L2capPayerLabViewModel extends ChangeNotifier {
     } on Object catch (failure) {
       error = LabErrorMessageHelper.messageFor(failure);
     }
-  }
-
-  void _recordScanResult(ScanResultEvent event) {
-    final scanSessionIdHex = _scanSessionIdHex;
-    if (!isScanning ||
-        scanSessionIdHex == null ||
-        event.sessionIdHex.toLowerCase() != scanSessionIdHex) {
-      return;
-    }
-    scanResults = BluetoothLabHelper.upsertScanResult(scanResults, event);
   }
 
   void _handleL2capData(L2capDataEvent event) {
@@ -378,8 +420,9 @@ class L2capPayerLabViewModel extends ChangeNotifier {
     unawaited(_eventsSubscription.cancel());
     final session = _session;
     final cleanup = <Future<void>>[
-      if (isScanning) _nativeService.stopScan(),
+      if (isScanning) _scan.stop(),
       if (session != null) session.close(),
+      if (_txFlow case final flow?) flow.cancel(),
     ];
     if (cleanup.isNotEmpty) {
       unawaited(

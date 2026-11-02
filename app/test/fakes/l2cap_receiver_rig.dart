@@ -6,6 +6,7 @@ import 'package:meshpay_native/l2cap_opened_event.dart';
 import 'fake_native_lab_service.dart';
 import 'fake_noise_service.dart';
 import 'fake_permission_service.dart';
+import 'fake_receiver_tx_engine_service.dart';
 
 /// A receiver view model whose fake native layer can be wired to a payer's
 /// fake native layer, so both ends talk through their real view models.
@@ -15,6 +16,7 @@ class L2capReceiverRig {
       native,
       FakePermissionService(),
       noise,
+      tx,
     );
   }
 
@@ -22,6 +24,7 @@ class L2capReceiverRig {
 
   final FakeNativeLabService native = FakeNativeLabService();
   final FakeNoiseService noise = FakeNoiseService();
+  final FakeReceiverTxEngineService tx = FakeReceiverTxEngineService();
   late final L2capReceiverLabViewModel viewModel;
 
   Future<void> startAndAccept() async {
