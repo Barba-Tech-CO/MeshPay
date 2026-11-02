@@ -15,6 +15,9 @@ dependencies:
 
   flutter_modular: ^7.1.1
 
+  meshpay_core:
+    path: ../packages/meshpay_core
+
   meshpay_native:
     path: ../packages/meshpay_native
 

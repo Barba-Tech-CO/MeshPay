@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_modular/flutter_modular.dart';
+import 'package:meshpay_core/meshpay_core.dart';
 import 'package:meshpay_native/meshpay_native.dart';
 
 import 'app_module.dart';
@@ -9,6 +10,7 @@ import 'core/storage/path_provider_app_support_directory_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await RustLib.init();
   final native = MeshpayNative();
   final clockLogRepository = JsonLinesClockLogRepository(
     PathProviderAppSupportDirectoryService(),

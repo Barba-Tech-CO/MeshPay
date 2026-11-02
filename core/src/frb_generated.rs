@@ -27,6 +27,7 @@
 
 // Section: imports
 
+use crate::api::*;
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
 use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
@@ -39,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
   default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -757153359;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 32818662;
 
 // Section: executor
 
@@ -47,6 +48,301 @@ flutter_rust_bridge::frb_generated_default_handler!();
 
 // Section: wire_funcs
 
+fn wire__crate__api__NoiseSession_decrypt_impl(
+  port_: flutter_rust_bridge::for_generated::MessagePort,
+  ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+  rust_vec_len_: i32,
+  data_len_: i32,
+) {
+  FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+    flutter_rust_bridge::for_generated::TaskInfo {
+      debug_name: "NoiseSession_decrypt",
+      port: Some(port_),
+      mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+    },
+    move || {
+      let message = unsafe {
+        flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+          ptr_,
+          rust_vec_len_,
+          data_len_,
+        )
+      };
+      let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+      let api_that = <RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<NoiseSession>,
+      >>::sse_decode(&mut deserializer);
+      let api_ciphertext = <Vec<u8>>::sse_decode(&mut deserializer);
+      deserializer.end();
+      move |context| {
+        transform_result_sse::<_, String>((move || {
+          let mut api_that_guard = None;
+          let decode_indices_ =
+            flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+              flutter_rust_bridge::for_generated::LockableOrderInfo::new(&api_that, 0, true),
+            ]);
+          for i in decode_indices_ {
+            match i {
+              0 => api_that_guard = Some(api_that.lockable_decode_sync_ref_mut()),
+              _ => unreachable!(),
+            }
+          }
+          let mut api_that_guard = api_that_guard.unwrap();
+          let output_ok = crate::api::NoiseSession::decrypt(&mut *api_that_guard, api_ciphertext)?;
+          std::result::Result::Ok(output_ok)
+        })())
+      }
+    },
+  )
+}
+fn wire__crate__api__NoiseSession_encrypt_impl(
+  port_: flutter_rust_bridge::for_generated::MessagePort,
+  ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+  rust_vec_len_: i32,
+  data_len_: i32,
+) {
+  FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+    flutter_rust_bridge::for_generated::TaskInfo {
+      debug_name: "NoiseSession_encrypt",
+      port: Some(port_),
+      mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+    },
+    move || {
+      let message = unsafe {
+        flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+          ptr_,
+          rust_vec_len_,
+          data_len_,
+        )
+      };
+      let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+      let api_that = <RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<NoiseSession>,
+      >>::sse_decode(&mut deserializer);
+      let api_plaintext = <Vec<u8>>::sse_decode(&mut deserializer);
+      deserializer.end();
+      move |context| {
+        transform_result_sse::<_, String>((move || {
+          let mut api_that_guard = None;
+          let decode_indices_ =
+            flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+              flutter_rust_bridge::for_generated::LockableOrderInfo::new(&api_that, 0, true),
+            ]);
+          for i in decode_indices_ {
+            match i {
+              0 => api_that_guard = Some(api_that.lockable_decode_sync_ref_mut()),
+              _ => unreachable!(),
+            }
+          }
+          let mut api_that_guard = api_that_guard.unwrap();
+          let output_ok = crate::api::NoiseSession::encrypt(&mut *api_that_guard, api_plaintext)?;
+          std::result::Result::Ok(output_ok)
+        })())
+      }
+    },
+  )
+}
+fn wire__crate__api__NoiseSession_is_finished_impl(
+  ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+  rust_vec_len_: i32,
+  data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+  FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+    flutter_rust_bridge::for_generated::TaskInfo {
+      debug_name: "NoiseSession_is_finished",
+      port: None,
+      mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+    },
+    move || {
+      let message = unsafe {
+        flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+          ptr_,
+          rust_vec_len_,
+          data_len_,
+        )
+      };
+      let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+      let api_that = <RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<NoiseSession>,
+      >>::sse_decode(&mut deserializer);
+      deserializer.end();
+      transform_result_sse::<_, ()>((move || {
+        let mut api_that_guard = None;
+        let decode_indices_ =
+          flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+            flutter_rust_bridge::for_generated::LockableOrderInfo::new(&api_that, 0, false),
+          ]);
+        for i in decode_indices_ {
+          match i {
+            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+            _ => unreachable!(),
+          }
+        }
+        let api_that_guard = api_that_guard.unwrap();
+        let output_ok = Ok::<_, ()>(crate::api::NoiseSession::is_finished(&*api_that_guard))?;
+        std::result::Result::Ok(output_ok)
+      })())
+    },
+  )
+}
+fn wire__crate__api__NoiseSession_new_initiator_impl(
+  ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+  rust_vec_len_: i32,
+  data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+  FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+    flutter_rust_bridge::for_generated::TaskInfo {
+      debug_name: "NoiseSession_new_initiator",
+      port: None,
+      mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+    },
+    move || {
+      let message = unsafe {
+        flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+          ptr_,
+          rust_vec_len_,
+          data_len_,
+        )
+      };
+      let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+      let api_responder_public_key = <Vec<u8>>::sse_decode(&mut deserializer);
+      let api_prologue = <Vec<u8>>::sse_decode(&mut deserializer);
+      deserializer.end();
+      transform_result_sse::<_, String>((move || {
+        let output_ok =
+          crate::api::NoiseSession::new_initiator(api_responder_public_key, api_prologue)?;
+        std::result::Result::Ok(output_ok)
+      })())
+    },
+  )
+}
+fn wire__crate__api__NoiseSession_new_responder_impl(
+  ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+  rust_vec_len_: i32,
+  data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+  FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+    flutter_rust_bridge::for_generated::TaskInfo {
+      debug_name: "NoiseSession_new_responder",
+      port: None,
+      mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+    },
+    move || {
+      let message = unsafe {
+        flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+          ptr_,
+          rust_vec_len_,
+          data_len_,
+        )
+      };
+      let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+      let api_local_private_key = <Vec<u8>>::sse_decode(&mut deserializer);
+      let api_prologue = <Vec<u8>>::sse_decode(&mut deserializer);
+      deserializer.end();
+      transform_result_sse::<_, String>((move || {
+        let output_ok =
+          crate::api::NoiseSession::new_responder(api_local_private_key, api_prologue)?;
+        std::result::Result::Ok(output_ok)
+      })())
+    },
+  )
+}
+fn wire__crate__api__NoiseSession_read_message_impl(
+  port_: flutter_rust_bridge::for_generated::MessagePort,
+  ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+  rust_vec_len_: i32,
+  data_len_: i32,
+) {
+  FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+    flutter_rust_bridge::for_generated::TaskInfo {
+      debug_name: "NoiseSession_read_message",
+      port: Some(port_),
+      mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+    },
+    move || {
+      let message = unsafe {
+        flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+          ptr_,
+          rust_vec_len_,
+          data_len_,
+        )
+      };
+      let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+      let api_that = <RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<NoiseSession>,
+      >>::sse_decode(&mut deserializer);
+      let api_message = <Vec<u8>>::sse_decode(&mut deserializer);
+      deserializer.end();
+      move |context| {
+        transform_result_sse::<_, String>((move || {
+          let mut api_that_guard = None;
+          let decode_indices_ =
+            flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+              flutter_rust_bridge::for_generated::LockableOrderInfo::new(&api_that, 0, true),
+            ]);
+          for i in decode_indices_ {
+            match i {
+              0 => api_that_guard = Some(api_that.lockable_decode_sync_ref_mut()),
+              _ => unreachable!(),
+            }
+          }
+          let mut api_that_guard = api_that_guard.unwrap();
+          let output_ok =
+            crate::api::NoiseSession::read_message(&mut *api_that_guard, api_message)?;
+          std::result::Result::Ok(output_ok)
+        })())
+      }
+    },
+  )
+}
+fn wire__crate__api__NoiseSession_write_message_impl(
+  port_: flutter_rust_bridge::for_generated::MessagePort,
+  ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+  rust_vec_len_: i32,
+  data_len_: i32,
+) {
+  FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+    flutter_rust_bridge::for_generated::TaskInfo {
+      debug_name: "NoiseSession_write_message",
+      port: Some(port_),
+      mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+    },
+    move || {
+      let message = unsafe {
+        flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+          ptr_,
+          rust_vec_len_,
+          data_len_,
+        )
+      };
+      let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+      let api_that = <RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<NoiseSession>,
+      >>::sse_decode(&mut deserializer);
+      let api_payload = <Vec<u8>>::sse_decode(&mut deserializer);
+      deserializer.end();
+      move |context| {
+        transform_result_sse::<_, String>((move || {
+          let mut api_that_guard = None;
+          let decode_indices_ =
+            flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+              flutter_rust_bridge::for_generated::LockableOrderInfo::new(&api_that, 0, true),
+            ]);
+          for i in decode_indices_ {
+            match i {
+              0 => api_that_guard = Some(api_that.lockable_decode_sync_ref_mut()),
+              _ => unreachable!(),
+            }
+          }
+          let mut api_that_guard = api_that_guard.unwrap();
+          let output_ok =
+            crate::api::NoiseSession::write_message(&mut *api_that_guard, api_payload)?;
+          std::result::Result::Ok(output_ok)
+        })())
+      }
+    },
+  )
+}
 fn wire__crate__api__core_selfcheck_impl(
   port_: flutter_rust_bridge::for_generated::MessagePort,
   ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -139,6 +435,34 @@ fn wire__crate__api__echo_impl(
     },
   )
 }
+fn wire__crate__api__generate_noise_static_keypair_impl(
+  ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+  rust_vec_len_: i32,
+  data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+  FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+    flutter_rust_bridge::for_generated::TaskInfo {
+      debug_name: "generate_noise_static_keypair",
+      port: None,
+      mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+    },
+    move || {
+      let message = unsafe {
+        flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+          ptr_,
+          rust_vec_len_,
+          data_len_,
+        )
+      };
+      let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+      deserializer.end();
+      transform_result_sse::<_, String>((move || {
+        let output_ok = crate::api::generate_noise_static_keypair()?;
+        std::result::Result::Ok(output_ok)
+      })())
+    },
+  )
+}
 fn wire__crate__api__ping_impl(
   ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
   rust_vec_len_: i32,
@@ -169,7 +493,33 @@ fn wire__crate__api__ping_impl(
   )
 }
 
+// Section: related_funcs
+
+flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
+  flutter_rust_bridge::for_generated::RustAutoOpaqueInner<NoiseSession>
+);
+
 // Section: dart2rust
+
+impl SseDecode for NoiseSession {
+  // Codec=Sse (Serialization based), see doc to use other codecs
+  fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+    let mut inner = <RustOpaqueMoi<
+      flutter_rust_bridge::for_generated::RustAutoOpaqueInner<NoiseSession>,
+    >>::sse_decode(deserializer);
+    return flutter_rust_bridge::for_generated::rust_auto_opaque_decode_owned(inner);
+  }
+}
+
+impl SseDecode
+  for RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<NoiseSession>>
+{
+  // Codec=Sse (Serialization based), see doc to use other codecs
+  fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+    let mut inner = <usize>::sse_decode(deserializer);
+    return decode_rust_opaque_moi(inner);
+  }
+}
 
 impl SseDecode for String {
   // Codec=Sse (Serialization based), see doc to use other codecs
@@ -218,6 +568,18 @@ impl SseDecode for Vec<u8> {
   }
 }
 
+impl SseDecode for crate::api::NoiseKeypair {
+  // Codec=Sse (Serialization based), see doc to use other codecs
+  fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+    let mut var_publicKey = <Vec<u8>>::sse_decode(deserializer);
+    let mut var_privateKey = <Vec<u8>>::sse_decode(deserializer);
+    return crate::api::NoiseKeypair {
+      public_key: var_publicKey,
+      private_key: var_privateKey,
+    };
+  }
+}
+
 impl SseDecode for u32 {
   // Codec=Sse (Serialization based), see doc to use other codecs
   fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -244,6 +606,13 @@ impl SseDecode for () {
   fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {}
 }
 
+impl SseDecode for usize {
+  // Codec=Sse (Serialization based), see doc to use other codecs
+  fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+    deserializer.cursor.read_u64::<NativeEndian>().unwrap() as _
+  }
+}
+
 impl SseDecode for i32 {
   // Codec=Sse (Serialization based), see doc to use other codecs
   fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -260,8 +629,12 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
   // Codec=Pde (Serialization + dispatch), see doc to use other codecs
   match func_id {
-    1 => wire__crate__api__core_selfcheck_impl(port, ptr, rust_vec_len, data_len),
-    3 => wire__crate__api__echo_impl(port, ptr, rust_vec_len, data_len),
+    1 => wire__crate__api__NoiseSession_decrypt_impl(port, ptr, rust_vec_len, data_len),
+    2 => wire__crate__api__NoiseSession_encrypt_impl(port, ptr, rust_vec_len, data_len),
+    6 => wire__crate__api__NoiseSession_read_message_impl(port, ptr, rust_vec_len, data_len),
+    7 => wire__crate__api__NoiseSession_write_message_impl(port, ptr, rust_vec_len, data_len),
+    8 => wire__crate__api__core_selfcheck_impl(port, ptr, rust_vec_len, data_len),
+    10 => wire__crate__api__echo_impl(port, ptr, rust_vec_len, data_len),
     _ => unreachable!(),
   }
 }
@@ -274,13 +647,31 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
   // Codec=Pde (Serialization + dispatch), see doc to use other codecs
   match func_id {
-    2 => wire__crate__api__core_version_impl(ptr, rust_vec_len, data_len),
-    4 => wire__crate__api__ping_impl(ptr, rust_vec_len, data_len),
+    3 => wire__crate__api__NoiseSession_is_finished_impl(ptr, rust_vec_len, data_len),
+    4 => wire__crate__api__NoiseSession_new_initiator_impl(ptr, rust_vec_len, data_len),
+    5 => wire__crate__api__NoiseSession_new_responder_impl(ptr, rust_vec_len, data_len),
+    9 => wire__crate__api__core_version_impl(ptr, rust_vec_len, data_len),
+    11 => wire__crate__api__generate_noise_static_keypair_impl(ptr, rust_vec_len, data_len),
+    12 => wire__crate__api__ping_impl(ptr, rust_vec_len, data_len),
     _ => unreachable!(),
   }
 }
 
 // Section: rust2dart
+
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<NoiseSession> {
+  fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+    flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self.0).into_dart()
+  }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for FrbWrapper<NoiseSession> {}
+
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<NoiseSession>> for NoiseSession {
+  fn into_into_dart(self) -> FrbWrapper<NoiseSession> {
+    self.into()
+  }
+}
 
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::CoreSelfcheck {
@@ -303,6 +694,40 @@ impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api:
 impl flutter_rust_bridge::IntoIntoDart<crate::api::CoreSelfcheck> for crate::api::CoreSelfcheck {
   fn into_into_dart(self) -> crate::api::CoreSelfcheck {
     self
+  }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::NoiseKeypair {
+  fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+    [
+      self.public_key.into_into_dart().into_dart(),
+      self.private_key.into_into_dart().into_dart(),
+    ]
+    .into_dart()
+  }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::NoiseKeypair {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::NoiseKeypair> for crate::api::NoiseKeypair {
+  fn into_into_dart(self) -> crate::api::NoiseKeypair {
+    self
+  }
+}
+
+impl SseEncode for NoiseSession {
+  // Codec=Sse (Serialization based), see doc to use other codecs
+  fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+    <RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<NoiseSession>>>::sse_encode(flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self), serializer);
+  }
+}
+
+impl SseEncode
+  for RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<NoiseSession>>
+{
+  // Codec=Sse (Serialization based), see doc to use other codecs
+  fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+    let (ptr, size) = self.sse_encode_raw();
+    <usize>::sse_encode(ptr, serializer);
+    <i32>::sse_encode(size, serializer);
   }
 }
 
@@ -342,6 +767,14 @@ impl SseEncode for Vec<u8> {
   }
 }
 
+impl SseEncode for crate::api::NoiseKeypair {
+  // Codec=Sse (Serialization based), see doc to use other codecs
+  fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+    <Vec<u8>>::sse_encode(self.public_key, serializer);
+    <Vec<u8>>::sse_encode(self.private_key, serializer);
+  }
+}
+
 impl SseEncode for u32 {
   // Codec=Sse (Serialization based), see doc to use other codecs
   fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -368,6 +801,16 @@ impl SseEncode for () {
   fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {}
 }
 
+impl SseEncode for usize {
+  // Codec=Sse (Serialization based), see doc to use other codecs
+  fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+    serializer
+      .cursor
+      .write_u64::<NativeEndian>(self as _)
+      .unwrap();
+  }
+}
+
 impl SseEncode for i32 {
   // Codec=Sse (Serialization based), see doc to use other codecs
   fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -383,6 +826,7 @@ mod io {
   // Section: imports
 
   use super::*;
+  use crate::api::*;
   use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
   use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
   use flutter_rust_bridge::{Handler, IntoIntoDart};
@@ -390,6 +834,20 @@ mod io {
   // Section: boilerplate
 
   flutter_rust_bridge::frb_generated_boilerplate_io!();
+
+  #[unsafe(no_mangle)]
+  pub extern "C" fn frbgen_meshpay_core_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNoiseSession(
+    ptr: *const std::ffi::c_void,
+  ) {
+    MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<NoiseSession>>::increment_strong_count(ptr as _);
+  }
+
+  #[unsafe(no_mangle)]
+  pub extern "C" fn frbgen_meshpay_core_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNoiseSession(
+    ptr: *const std::ffi::c_void,
+  ) {
+    MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<NoiseSession>>::decrement_strong_count(ptr as _);
+  }
 }
 #[cfg(not(target_family = "wasm"))]
 pub use io::*;
@@ -403,6 +861,7 @@ mod web {
   // Section: imports
 
   use super::*;
+  use crate::api::*;
   use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
   use flutter_rust_bridge::for_generated::wasm_bindgen;
   use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
@@ -412,6 +871,20 @@ mod web {
   // Section: boilerplate
 
   flutter_rust_bridge::frb_generated_boilerplate_web!();
+
+  #[wasm_bindgen]
+  pub fn rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNoiseSession(
+    ptr: *const std::ffi::c_void,
+  ) {
+    MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<NoiseSession>>::increment_strong_count(ptr as _);
+  }
+
+  #[wasm_bindgen]
+  pub fn rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNoiseSession(
+    ptr: *const std::ffi::c_void,
+  ) {
+    MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<NoiseSession>>::decrement_strong_count(ptr as _);
+  }
 }
 #[cfg(target_family = "wasm")]
 pub use web::*;
