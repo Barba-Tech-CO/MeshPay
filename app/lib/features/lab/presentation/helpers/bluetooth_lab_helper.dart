@@ -2,7 +2,11 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
+import 'package:meshpay_native/scan_result_event.dart';
+
 import '../../../../core/ble/native_lab_service.dart';
+import '../../../../core/ble/permission_service.dart';
+import 'lab_error_message_helper.dart';
 
 class BluetoothLabHelper {
   BluetoothLabHelper._();
@@ -26,6 +30,36 @@ class BluetoothLabHelper {
       throw StateError('A descoberta precede o início do scan.');
     }
     return elapsedNanos ~/ _nanosecondsPerMillisecond;
+  }
+
+  static List<ScanResultEvent> upsertScanResult(
+    List<ScanResultEvent> results,
+    ScanResultEvent event,
+  ) {
+    final updated = List<ScanResultEvent>.of(results);
+    final index = updated.indexWhere(
+      (result) => result.deviceId == event.deviceId,
+    );
+    if (index < 0) {
+      updated.add(event);
+    } else {
+      updated[index] = event;
+    }
+    return List<ScanResultEvent>.unmodifiable(updated);
+  }
+
+  /// Null when permitted, otherwise the message to show the user.
+  static Future<String?> permissionError(
+    PermissionService permissionService,
+  ) async {
+    try {
+      if (await permissionService.hasBluetoothPermissions()) {
+        return null;
+      }
+      return 'Conceda as permissões de Bluetooth antes de continuar.';
+    } on Object catch (failure) {
+      return LabErrorMessageHelper.messageFor(failure);
+    }
   }
 
   static bool bytesMatch(Uint8List first, Uint8List second) =>

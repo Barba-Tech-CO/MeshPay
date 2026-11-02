@@ -1,6 +1,11 @@
 class PercentileHelper {
   PercentileHelper._();
 
+  static double? percentileOrNull(List<num> values, double percentile) =>
+      values.isEmpty
+      ? null
+      : PercentileHelper.percentile(values, percentile).toDouble();
+
   static num percentile(List<num> values, double percentile) {
     if (values.isEmpty ||
         !percentile.isFinite ||
