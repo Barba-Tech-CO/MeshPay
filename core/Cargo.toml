@@ -16,6 +16,7 @@ rustc_version_runtime = "0.3.0"
 snow = "0.10.0"
 
 [dev-dependencies]
+serde_json = "1.0.154"
 tempfile = "3.27.0"
 
 [lints.rust]

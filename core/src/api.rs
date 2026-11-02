@@ -4,7 +4,7 @@ use p256::ecdsa::{
   signature::{Signer, Verifier},
 };
 use rusqlite::Connection;
-use snow::Builder;
+use snow::{Builder, HandshakeState, TransportState, params::NoiseParams};
 use std::fs::{self, OpenOptions};
 use std::io;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -23,6 +23,146 @@ pub fn ping(n: u32) -> u32 {
 
 pub fn echo(data: Vec<u8>) -> Vec<u8> {
   data
+}
+
+const NOISE_XK_PROTOCOL: &str = "Noise_XK_25519_ChaChaPoly_BLAKE2s";
+const NOISE_MAX_MESSAGE_LEN: usize = 65535;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NoiseKeypair {
+  pub public_key: Vec<u8>,
+  pub private_key: Vec<u8>,
+}
+
+/// Fresh X25519 static keypair; the receiver calls this once per charge.
+#[frb(sync)]
+pub fn generate_noise_static_keypair() -> Result<NoiseKeypair, String> {
+  let keypair = Builder::new(noise_xk_params()?)
+    .generate_keypair()
+    .map_err(noise_error)?;
+
+  Ok(NoiseKeypair {
+    public_key: keypair.public,
+    private_key: keypair.private,
+  })
+}
+
+enum NoiseStage {
+  Handshake(Box<HandshakeState>),
+  Transport(Box<TransportState>),
+  Failed,
+}
+
+pub struct NoiseSession {
+  stage: NoiseStage,
+}
+
+impl NoiseSession {
+  /// Prologue = all QR data, byte for byte as scanned.
+  #[frb(sync)]
+  pub fn new_initiator(
+    responder_public_key: Vec<u8>,
+    prologue: Vec<u8>,
+  ) -> Result<NoiseSession, String> {
+    // The initiator's own static is required by the XK pattern, not by the protocol of this app:
+    // it is generated here and discarded with the session.
+    let params = noise_xk_params()?;
+    let local_private_key = Builder::new(params.clone())
+      .generate_keypair()
+      .map_err(noise_error)?
+      .private;
+    let state = Builder::new(params)
+      .local_private_key(&local_private_key)
+      .and_then(|builder| builder.remote_public_key(&responder_public_key))
+      .and_then(|builder| builder.prologue(&prologue))
+      .and_then(|builder| builder.build_initiator())
+      .map_err(noise_error)?;
+
+    Ok(NoiseSession {
+      stage: NoiseStage::Handshake(Box::new(state)),
+    })
+  }
+
+  #[frb(sync)]
+  pub fn new_responder(
+    local_private_key: Vec<u8>,
+    prologue: Vec<u8>,
+  ) -> Result<NoiseSession, String> {
+    let state = Builder::new(noise_xk_params()?)
+      .local_private_key(&local_private_key)
+      .and_then(|builder| builder.prologue(&prologue))
+      .and_then(|builder| builder.build_responder())
+      .map_err(noise_error)?;
+
+    Ok(NoiseSession {
+      stage: NoiseStage::Handshake(Box::new(state)),
+    })
+  }
+
+  #[frb(sync)]
+  pub fn is_finished(&self) -> bool {
+    matches!(self.stage, NoiseStage::Transport(_))
+  }
+
+  pub fn write_message(&mut self, payload: Vec<u8>) -> Result<Vec<u8>, String> {
+    self.step_handshake(|state, buffer| state.write_message(&payload, buffer))
+  }
+
+  pub fn read_message(&mut self, message: Vec<u8>) -> Result<Vec<u8>, String> {
+    self.step_handshake(|state, buffer| state.read_message(&message, buffer))
+  }
+
+  pub fn encrypt(&mut self, plaintext: Vec<u8>) -> Result<Vec<u8>, String> {
+    self.transport_step(|state, buffer| state.write_message(&plaintext, buffer))
+  }
+
+  pub fn decrypt(&mut self, ciphertext: Vec<u8>) -> Result<Vec<u8>, String> {
+    self.transport_step(|state, buffer| state.read_message(&ciphertext, buffer))
+  }
+
+  fn step_handshake(
+    &mut self,
+    operation: impl FnOnce(&mut HandshakeState, &mut [u8]) -> Result<usize, snow::Error>,
+  ) -> Result<Vec<u8>, String> {
+    let NoiseStage::Handshake(mut state) = std::mem::replace(&mut self.stage, NoiseStage::Failed)
+    else {
+      return Err("noise handshake is not in progress".to_owned());
+    };
+    let mut buffer = vec![0; NOISE_MAX_MESSAGE_LEN];
+    // A failed step leaves the stage as Failed: a bad message ends the session.
+    let length = operation(&mut state, &mut buffer).map_err(noise_error)?;
+    buffer.truncate(length);
+
+    self.stage = if state.is_handshake_finished() {
+      NoiseStage::Transport(Box::new(state.into_transport_mode().map_err(noise_error)?))
+    } else {
+      NoiseStage::Handshake(state)
+    };
+
+    Ok(buffer)
+  }
+
+  fn transport_step(
+    &mut self,
+    operation: impl FnOnce(&mut TransportState, &mut [u8]) -> Result<usize, snow::Error>,
+  ) -> Result<Vec<u8>, String> {
+    let NoiseStage::Transport(state) = &mut self.stage else {
+      return Err("noise handshake is not finished".to_owned());
+    };
+    let mut buffer = vec![0; NOISE_MAX_MESSAGE_LEN];
+    let length = operation(state, &mut buffer).map_err(noise_error)?;
+    buffer.truncate(length);
+
+    Ok(buffer)
+  }
+}
+
+fn noise_xk_params() -> Result<NoiseParams, String> {
+  NOISE_XK_PROTOCOL.parse().map_err(noise_error)
+}
+
+fn noise_error(error: snow::Error) -> String {
+  format!("noise: {error}")
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
