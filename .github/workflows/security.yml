@@ -39,9 +39,21 @@ jobs:
         if: steps.detect.outputs.present == 'true'
         working-directory: core
         run: cargo audit
+      - name: Run cargo audit (server)
+        if: steps.detect.outputs.present == 'true'
+        working-directory: server
+        run: cargo audit
       - name: Check Rust dependency policy
         if: steps.detect.outputs.present == 'true'
         working-directory: core
+        run: |
+          cargo deny --config ../deny.toml check advisories
+          cargo deny --config ../deny.toml check licenses
+          cargo deny --config ../deny.toml check sources
+          cargo deny --config ../deny.toml check bans
+      - name: Check Rust dependency policy (server)
+        if: steps.detect.outputs.present == 'true'
+        working-directory: server
         run: |
           cargo deny --config ../deny.toml check advisories
           cargo deny --config ../deny.toml check licenses
