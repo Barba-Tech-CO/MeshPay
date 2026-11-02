@@ -9,3 +9,6 @@ paths = [
     '''(^|/)test/''',
     '''(^|/)tests/''',
 ]
+commits = [
+    '''0b9b1827f737c6ed1beaa9695da5a043424f8be9''',
+]
