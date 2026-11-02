@@ -4,6 +4,7 @@ import 'package:flutter_modular/flutter_modular.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../helpers/noise_handshake_label_helper.dart';
+import '../helpers/tx_lab_state_label_helper.dart';
 import '../view_models/l2cap_receiver_lab_view_model.dart';
 
 class L2capReceiverLabPage extends StatelessWidget {
@@ -104,6 +105,24 @@ class L2capReceiverLabPage extends StatelessWidget {
               label: 'Mensagens recebidas',
               value: '${viewModel.receivedMessageCount}',
               mono: true,
+            ),
+          ),
+          const SizedBox(height: 16),
+          SectionCardDs(
+            title: 'Transação (unidade TEST)',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                MetricRowDs(
+                  label: 'Estado',
+                  value: TxLabStateLabelHelper.labelFor(viewModel.txState),
+                ),
+                MetricRowDs(
+                  label: 'ID da transação',
+                  value: viewModel.txIdHex ?? 'Indisponível',
+                  mono: true,
+                ),
+              ],
             ),
           ),
           if (viewModel.error case final error?)
