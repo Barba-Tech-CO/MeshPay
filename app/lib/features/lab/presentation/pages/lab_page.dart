@@ -36,6 +36,24 @@ class LabPage extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(height: 16),
+          SectionCardDs(
+            title: 'Canal L2CAP (Fase 1)',
+            child: Column(
+              children: [
+                ListTile(
+                  title: const Text('Receptor L2CAP'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.pushNamed(AppRoutes.labL2capReceiver),
+                ),
+                ListTile(
+                  title: const Text('Pagador L2CAP'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.pushNamed(AppRoutes.labL2capPayer),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

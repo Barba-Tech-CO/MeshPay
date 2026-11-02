@@ -44,6 +44,9 @@ void main() {
     native.clockError = StateError('clock offline');
     await tester.tap(find.text('Ler relógio'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('clock offline'), findsOneWidget);
+    expect(
+      find.textContaining('Ocorreu um erro inesperado. Tente novamente.'),
+      findsOneWidget,
+    );
   });
 }
