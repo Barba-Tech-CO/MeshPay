@@ -116,24 +116,24 @@ void main() {
       final viewModel = BluetoothLabViewModel(native, permissions);
 
       await viewModel.requestBluetoothPermissions();
-      expect(viewModel.error, contains('permission request failed'));
+      expect(viewModel.error, 'Ocorreu um erro inesperado. Tente novamente.');
 
       permissions
         ..requestError = null
         ..checkError = StateError('permission status failed');
       await viewModel.startScan();
-      expect(viewModel.error, contains('permission status failed'));
+      expect(viewModel.error, 'Ocorreu um erro inesperado. Tente novamente.');
 
       permissions.checkError = null;
       native.bluetoothStatusError = StateError('status unavailable');
       await viewModel.initialize();
-      expect(viewModel.error, contains('status unavailable'));
+      expect(viewModel.error, 'Ocorreu um erro inesperado. Tente novamente.');
 
       native
         ..bluetoothStatusError = null
         ..scanError = StateError('scan failed');
       await viewModel.startScan();
-      expect(viewModel.error, contains('scan failed'));
+      expect(viewModel.error, 'Ocorreu um erro inesperado. Tente novamente.');
 
       native.scanError = null;
       await viewModel.startScan();
@@ -145,10 +145,10 @@ void main() {
           elapsedRealtimeNanos: 0,
         ),
       );
-      expect(viewModel.error, contains('precede'));
+      expect(viewModel.error, 'Ocorreu um erro inesperado. Tente novamente.');
 
       viewModel.handleNativeStreamError(StateError('event stream failed'));
-      expect(viewModel.error, contains('event stream failed'));
+      expect(viewModel.error, 'Ocorreu um erro inesperado. Tente novamente.');
       await viewModel.connectL2cap(deviceId: '', psm: 'inválido');
       expect(viewModel.error, contains('PSM válido'));
       viewModel.dispose();
@@ -161,7 +161,7 @@ void main() {
     final viewModel = BluetoothLabViewModel(native, FakePermissionService());
     await viewModel.runL2capEcho(deviceId: 'AA:BB', psm: '25');
 
-    expect(viewModel.error, contains('A conexão foi encerrada.'));
+    expect(viewModel.error, 'Ocorreu um erro inesperado. Tente novamente.');
     expect(viewModel.l2capSuccessCount, 0);
   });
 
@@ -194,7 +194,7 @@ void main() {
     await viewModel.runL2capEcho(deviceId: 'AA:BB', psm: '25');
 
     expect(viewModel.l2capSuccessCount, 0);
-    expect(viewModel.error, contains('Eco incorreto'));
+    expect(viewModel.error, 'Ocorreu um erro inesperado. Tente novamente.');
   });
 
   test(

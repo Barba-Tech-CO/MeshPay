@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:meshpay_native/bluetooth_status.dart';
 import 'package:meshpay_native/clock_sample.dart';
 import 'package:meshpay_native/l2cap_closed_event.dart';
@@ -15,6 +16,7 @@ import '../../../../core/ble/permission_service.dart';
 import '../../../../core/clock/percentile_helper.dart';
 import '../../domain/entities/lab_scan_measurement.dart';
 import '../helpers/bluetooth_lab_helper.dart';
+import '../helpers/lab_error_message_helper.dart';
 
 class BluetoothLabViewModel extends ChangeNotifier {
   BluetoothLabViewModel(this._nativeService, this._permissionService) {
@@ -62,7 +64,7 @@ class BluetoothLabViewModel extends ChangeNotifier {
       permissionsGranted = await _permissionService.hasBluetoothPermissions();
       _notifyIfActive();
     } on Object catch (failure) {
-      error = failure.toString();
+      error = LabErrorMessageHelper.messageFor(failure);
       _notifyIfActive();
     }
   }
@@ -77,7 +79,7 @@ class BluetoothLabViewModel extends ChangeNotifier {
         error = 'As permissões de Bluetooth não foram concedidas.';
       }
     } on Object catch (failure) {
-      error = failure.toString();
+      error = LabErrorMessageHelper.messageFor(failure);
     }
     _notifyIfActive();
   }
@@ -93,7 +95,7 @@ class BluetoothLabViewModel extends ChangeNotifier {
       sessionIdHex = session;
       isAdvertising = true;
     } on Object catch (failure) {
-      error = failure.toString();
+      error = LabErrorMessageHelper.messageFor(failure);
     }
     _notifyIfActive();
   }
@@ -104,7 +106,7 @@ class BluetoothLabViewModel extends ChangeNotifier {
       await _nativeService.stopAdvertising();
       isAdvertising = false;
     } on Object catch (failure) {
-      error = failure.toString();
+      error = LabErrorMessageHelper.messageFor(failure);
     }
     _notifyIfActive();
   }
@@ -126,7 +128,7 @@ class BluetoothLabViewModel extends ChangeNotifier {
       scanResults = const <LabScanMeasurement>[];
       isScanning = true;
     } on Object catch (failure) {
-      error = failure.toString();
+      error = LabErrorMessageHelper.messageFor(failure);
     }
     _notifyIfActive();
   }
@@ -137,7 +139,7 @@ class BluetoothLabViewModel extends ChangeNotifier {
       await _nativeService.stopScan();
       isScanning = false;
     } on Object catch (failure) {
-      error = failure.toString();
+      error = LabErrorMessageHelper.messageFor(failure);
     }
     _notifyIfActive();
   }
@@ -151,7 +153,7 @@ class BluetoothLabViewModel extends ChangeNotifier {
       l2capPsm = await _nativeService.listenL2cap();
       isListening = true;
     } on Object catch (failure) {
-      error = failure.toString();
+      error = LabErrorMessageHelper.messageFor(failure);
     }
     _notifyIfActive();
   }
@@ -163,7 +165,7 @@ class BluetoothLabViewModel extends ChangeNotifier {
       isListening = false;
       l2capPsm = null;
     } on Object catch (failure) {
-      error = failure.toString();
+      error = LabErrorMessageHelper.messageFor(failure);
     }
     _notifyIfActive();
   }
@@ -199,7 +201,7 @@ class BluetoothLabViewModel extends ChangeNotifier {
       connectedChannelId = channelId;
       _activeChannelIds.add(channelId);
     } on Object catch (failure) {
-      error = failure.toString();
+      error = LabErrorMessageHelper.messageFor(failure);
     }
     _notifyIfActive();
   }
@@ -240,7 +242,7 @@ class BluetoothLabViewModel extends ChangeNotifier {
         durations.add(await _measureEchoAttempt(targetDeviceId, targetPsm));
         l2capSuccessCount++;
       } on Object catch (failure) {
-        error = failure.toString();
+        error = LabErrorMessageHelper.messageFor(failure);
       }
     }
     if (durations.isNotEmpty) {
@@ -287,7 +289,9 @@ class BluetoothLabViewModel extends ChangeNotifier {
           );
         }
       case NativeErrorEvent():
-        final message = '${event.code}: ${event.message}';
+        final message = LabErrorMessageHelper.messageFor(
+          PlatformException(code: event.code, message: event.message),
+        );
         error = message;
         if (event.channelId case final channelId?) {
           final pending = _pendingEchoes.remove(channelId);
@@ -300,7 +304,7 @@ class BluetoothLabViewModel extends ChangeNotifier {
   }
 
   void handleNativeStreamError(Object failure) {
-    error = failure.toString();
+    error = LabErrorMessageHelper.messageFor(failure);
     _notifyIfActive();
   }
 
@@ -360,7 +364,7 @@ class BluetoothLabViewModel extends ChangeNotifier {
       }
       scanResults = List<LabScanMeasurement>.unmodifiable(updatedResults);
     } on Object catch (failure) {
-      error = failure.toString();
+      error = LabErrorMessageHelper.messageFor(failure);
     }
   }
 
@@ -382,7 +386,7 @@ class BluetoothLabViewModel extends ChangeNotifier {
         data: Uint8List.fromList(event.data),
       );
     } on Object catch (failure) {
-      error = failure.toString();
+      error = LabErrorMessageHelper.messageFor(failure);
       _notifyIfActive();
     }
   }
@@ -394,7 +398,7 @@ class BluetoothLabViewModel extends ChangeNotifier {
     try {
       permissionsGranted = await _permissionService.hasBluetoothPermissions();
     } on Object catch (failure) {
-      error = failure.toString();
+      error = LabErrorMessageHelper.messageFor(failure);
       _notifyIfActive();
       return false;
     }

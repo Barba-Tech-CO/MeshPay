@@ -32,7 +32,7 @@ void main() {
 
     await viewModel.initialize();
 
-    expect(viewModel.error, contains('clock offline'));
+    expect(viewModel.error, 'Ocorreu um erro inesperado. Tente novamente.');
     expect(viewModel.entries, isEmpty);
   });
 }

@@ -183,6 +183,14 @@ class FakeNativeLabService implements NativeLabService {
     _echoHandler = handler;
   }
 
+  Future<Uint8List> echoReceivedData(Uint8List data) async {
+    final handler = _echoHandler;
+    if (handler == null) {
+      throw StateError('The echo handler has not been registered.');
+    }
+    return handler(Uint8List.fromList(data));
+  }
+
   @override
   Future<List<int>> runLoopbackEcho({
     required int sizeBytes,

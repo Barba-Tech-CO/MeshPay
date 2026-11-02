@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../../core/ble/native_lab_service.dart';
 import '../../../../core/clock/percentile_helper.dart';
+import '../helpers/lab_error_message_helper.dart';
 
 class ChannelLabViewModel extends ChangeNotifier {
   ChannelLabViewModel(this._nativeService);
@@ -48,7 +49,7 @@ class ChannelLabViewModel extends ChangeNotifier {
         ).toDouble();
       }
     } on Object catch (failure) {
-      error = failure.toString();
+      error = LabErrorMessageHelper.messageFor(failure);
     } finally {
       isBusy = false;
       _notifyIfActive();
