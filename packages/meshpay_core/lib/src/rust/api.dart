@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `append_path_suffix`, `create_selfcheck_database_path`, `noise_error`, `noise_xk_params`, `read_selfcheck_value`, `remove_selfcheck_database`, `run_noise_xk_selfcheck`, `run_p256_selfcheck`, `run_sqlcipher_selfcheck`, `step_handshake`, `transport_step`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `NoiseStage`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`
 
 String coreVersion() => RustLib.instance.api.crateApiCoreVersion();
 
@@ -24,6 +24,9 @@ NoiseKeypair generateNoiseStaticKeypair() =>
 
 Future<CoreSelfcheck> coreSelfcheck({required String storageDir}) =>
     RustLib.instance.api.crateApiCoreSelfcheck(storageDir: storageDir);
+
+Future<LabSigningKey> generateLabSigningKey() =>
+    RustLib.instance.api.crateApiGenerateLabSigningKey();
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<NoiseSession>>
 abstract class NoiseSession implements RustOpaqueInterface {
@@ -53,6 +56,60 @@ abstract class NoiseSession implements RustOpaqueInterface {
   Future<Uint8List> readMessage({required List<int> message});
 
   Future<Uint8List> writeMessage({required List<int> payload});
+}
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<PayerTxEngine>>
+abstract class PayerTxEngine implements RustOpaqueInterface {
+  /// Expires still-locked cheques signed at least `expiry_secs` before `now_unix`; returns the count.
+  Future<int> expireLocked({
+    required BigInt nowUnix,
+    required BigInt expirySecs,
+  });
+
+  Future<void> onAck({required List<int> ack});
+
+  /// `db_key` is the raw 32-byte SQLCipher key; `payee_public_key` is a compressed P-256 key.
+  static Future<PayerTxEngine> open({
+    required String dbPath,
+    required List<int> dbKey,
+    required List<int> signingSeed,
+    required List<int> payeePublicKey,
+  }) => RustLib.instance.api.crateApiPayerTxEngineOpen(
+    dbPath: dbPath,
+    dbKey: dbKey,
+    signingSeed: signingSeed,
+    payeePublicKey: payeePublicKey,
+  );
+
+  /// Returns the `TxPropose` bytes to send, only after intent and LOCKED_OUTGOING are durable.
+  Future<Uint8List> propose({
+    required List<int> spendBody,
+    required BigInt counter,
+    required List<int> recipientId,
+  });
+
+  /// Stored `TxPropose` bytes of every still-locked cheque, for byte-identical redelivery.
+  Future<List<Uint8List>> resumePending();
+}
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ReceiverTxEngine>>
+abstract class ReceiverTxEngine implements RustOpaqueInterface {
+  /// Returns the `AckReceipt` bytes; the same propose twice returns the same ack.
+  Future<Uint8List> onPropose({required List<int> propose});
+
+  static Future<ReceiverTxEngine> open({
+    required String dbPath,
+    required List<int> dbKey,
+    required List<int> signingSeed,
+    required List<int> payerPublicKey,
+    required List<int> ownAccountId,
+  }) => RustLib.instance.api.crateApiReceiverTxEngineOpen(
+    dbPath: dbPath,
+    dbKey: dbKey,
+    signingSeed: signingSeed,
+    payerPublicKey: payerPublicKey,
+    ownAccountId: ownAccountId,
+  );
 }
 
 class CoreSelfcheck {
@@ -92,6 +149,25 @@ class CoreSelfcheck {
           p256SignVerifyOk == other.p256SignVerifyOk &&
           rustVersion == other.rustVersion &&
           elapsedMicros == other.elapsedMicros;
+}
+
+/// LAB ONLY (TEST unit, no real value): software P-256 key for the two-phase commit engines.
+class LabSigningKey {
+  final Uint8List seed;
+  final Uint8List publicKey;
+
+  const LabSigningKey({required this.seed, required this.publicKey});
+
+  @override
+  int get hashCode => seed.hashCode ^ publicKey.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LabSigningKey &&
+          runtimeType == other.runtimeType &&
+          seed == other.seed &&
+          publicKey == other.publicKey;
 }
 
 class NoiseKeypair {
