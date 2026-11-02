@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meshpay/core/ble/l2cap_frame_codec.dart';
 import 'package:meshpay/core/noise/noise_handshake_status.dart';
+import 'package:meshpay/core/tx/lab_frame_helper.dart';
 import 'package:meshpay/features/lab/presentation/helpers/lab_error_message_helper.dart';
 import 'package:meshpay/features/lab/presentation/view_models/l2cap_receiver_lab_view_model.dart';
 import 'package:meshpay_native/l2cap_closed_event.dart';
@@ -13,6 +14,7 @@ import '../../../../fakes/fake_native_lab_service.dart';
 import '../../../../fakes/fake_noise_channel.dart';
 import '../../../../fakes/fake_noise_service.dart';
 import '../../../../fakes/fake_permission_service.dart';
+import '../../../../fakes/fake_receiver_tx_engine_service.dart';
 import '../../../../fakes/l2cap_receiver_rig.dart';
 
 void main() {
@@ -22,6 +24,7 @@ void main() {
       native,
       FakePermissionService(),
       FakeNoiseService(),
+      FakeReceiverTxEngineService(),
     );
 
     await viewModel.start();
@@ -52,6 +55,7 @@ void main() {
       native,
       FakePermissionService(),
       FakeNoiseService(),
+      FakeReceiverTxEngineService(),
     );
 
     viewModel.handleNativeEvent(
@@ -78,6 +82,7 @@ void main() {
       native,
       FakePermissionService(),
       FakeNoiseService(),
+      FakeReceiverTxEngineService(),
     );
 
     await viewModel.start();
@@ -98,6 +103,7 @@ void main() {
         native,
         FakePermissionService()..granted = false,
         FakeNoiseService(),
+        FakeReceiverTxEngineService(),
       );
 
       await viewModel.start();
@@ -116,6 +122,7 @@ void main() {
       FakeNativeLabService(),
       FakePermissionService(),
       noise,
+      FakeReceiverTxEngineService(),
     );
     final keys = <String>{};
 
@@ -134,7 +141,7 @@ void main() {
   Future<FakeNoiseChannel> sendMsg1(L2capReceiverRig rig) async {
     final initiator = FakeNoiseChannel(
       isInitiator: true,
-      binding: rig.noise.responders.single.binding,
+      binding: rig.noise.responders.last.binding,
     );
     rig.viewModel.handleNativeEvent(
       L2capDataEvent(
@@ -185,7 +192,7 @@ void main() {
     expect(viewModel.handshakeStatus, NoiseHandshakeStatus.finished);
     expect(rig.native.sentL2capPayloads, hasLength(1));
 
-    final plaintext = Uint8List.fromList(<int>[9, 8, 7]);
+    final plaintext = LabFrameHelper.encode(LabFrameType.echo, <int>[9, 8, 7]);
     await sendFrame(rig, await initiator.encrypt(plaintext));
 
     expect(rig.native.sentL2capPayloads, hasLength(2));
@@ -355,6 +362,30 @@ void main() {
     expect(rig.native.stopListeningCalls, 1);
     expect(rig.native.stopAdvertisingCalls, 1);
     expect(rig.native.closedChannels, <int>[L2capReceiverRig.serverChannelId]);
+    await rig.dispose();
+  });
+
+  test('a failure inside a frame does not poison the queue', () async {
+    final rig = L2capReceiverRig();
+    await rig.startAndAccept();
+    rig.tx.closeError = StateError('close boom');
+    final initiator = await sendMsg1(rig);
+    await initiator.readMessage(
+      L2capFrameCodec.decode(rig.native.sentL2capPayloads.single),
+    );
+
+    // msg3 ends the charge; closing the tx engine fails twice (the handshake
+    // path and the failure cleanup), so the error escapes _processData.
+    await sendFrame(rig, await initiator.writeMessage());
+    expect(rig.viewModel.error, isNotNull);
+
+    rig.tx.closeError = null;
+    await rig.viewModel.stop();
+    final sentBefore = rig.native.sentL2capPayloads.length;
+    await rig.startAndAccept();
+    await sendMsg1(rig);
+
+    expect(rig.native.sentL2capPayloads, hasLength(sentBefore + 1));
     await rig.dispose();
   });
 }

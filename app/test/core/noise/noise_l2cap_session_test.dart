@@ -111,4 +111,35 @@ void main() {
       expect(session.status, NoiseHandshakeStatus.failed);
     },
   );
+
+  test(
+    'a failure that lands while send is in flight is not an unhandled error',
+    () async {
+      final uncaught = <Object>[];
+      final native = _GatedSendNative();
+      await runZonedGuarded(() async {
+        final session = newSession(native);
+        final exchange = session.exchange(Uint8List.fromList(<int>[9]));
+        await Future<void>.delayed(Duration.zero);
+
+        session.failPending(StateError('link lost'));
+        await Future<void>.delayed(Duration.zero);
+        native.gate.complete();
+
+        await expectLater(exchange, throwsStateError);
+      }, (error, _) => uncaught.add(error));
+
+      expect(uncaught, isEmpty);
+    },
+  );
+}
+
+class _GatedSendNative extends FakeNativeLabService {
+  final Completer<void> gate = Completer<void>();
+
+  @override
+  Future<void> sendL2cap({
+    required int channelId,
+    required Uint8List data,
+  }) => gate.future;
 }

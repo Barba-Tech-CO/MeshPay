@@ -7,6 +7,7 @@ import 'package:meshpay/features/lab/presentation/view_models/l2cap_receiver_lab
 import '../../../../fakes/fake_native_lab_service.dart';
 import '../../../../fakes/fake_noise_service.dart';
 import '../../../../fakes/fake_permission_service.dart';
+import '../../../../fakes/fake_receiver_tx_engine_service.dart';
 
 void main() {
   testWidgets('shows receiver controls and current closed state', (
@@ -16,6 +17,7 @@ void main() {
       FakeNativeLabService(),
       FakePermissionService(),
       FakeNoiseService(),
+      FakeReceiverTxEngineService(),
     );
     final module = createModule(register: (_) {});
 

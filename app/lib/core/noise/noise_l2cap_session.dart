@@ -66,11 +66,13 @@ class NoiseL2capSession {
   Future<Uint8List> exchange(Uint8List body) async {
     final pending = Completer<Uint8List>();
     _pending = pending;
-    final response = pending.future.timeout(frameTimeout);
+    // ignore() keeps a failPending/onRemoteClosed that lands while send() is
+    // still awaited from becoming an unhandled error; `await response` below
+    // still throws it.
+    final response = pending.future.timeout(frameTimeout)..ignore();
     try {
       await send(body);
     } on Object {
-      response.ignore();
       _pending = null;
       rethrow;
     }
@@ -141,11 +143,11 @@ class NoiseL2capSession {
     await send(reply);
   }
 
-  /// Responder side: decrypts [ciphertext] and sends it back encrypted.
-  Future<void> echoEncrypted(Uint8List ciphertext) async {
-    final plaintext = await _noise.decrypt(ciphertext);
-    await send(await _noise.encrypt(plaintext));
-  }
+  Future<Uint8List> decrypt(Uint8List ciphertext) => _noise.decrypt(ciphertext);
+
+  /// Responder side: encrypts [plaintext] and sends it as one frame.
+  Future<void> sendEncrypted(Uint8List plaintext) async =>
+      send(await _noise.encrypt(plaintext));
 
   void markFailed() => status = NoiseHandshakeStatus.failed;
 

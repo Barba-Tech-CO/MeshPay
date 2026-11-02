@@ -6,6 +6,7 @@ import 'package:meshpay/features/lab/presentation/view_models/l2cap_payer_lab_vi
 
 import '../../../../fakes/fake_native_lab_service.dart';
 import '../../../../fakes/fake_noise_service.dart';
+import '../../../../fakes/fake_payer_tx_engine_service.dart';
 import '../../../../fakes/fake_permission_service.dart';
 
 void main() {
@@ -16,6 +17,7 @@ void main() {
       FakeNativeLabService(),
       FakePermissionService(),
       FakeNoiseService(),
+      FakePayerTxEngineService(),
     );
     final module = createModule(register: (_) {});
 

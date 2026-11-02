@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../../../../core/tx/payer_tx_lab_flow.dart';
 import '../helpers/noise_handshake_label_helper.dart';
+import '../helpers/tx_lab_state_label_helper.dart';
 import '../view_models/l2cap_payer_lab_view_model.dart';
 
 class L2capPayerLabPage extends StatefulWidget {
@@ -214,6 +216,43 @@ class _L2capPayerLabPageState extends State<L2capPayerLabPage> {
                   value:
                       viewModel.p95Milliseconds?.toStringAsFixed(3) ??
                       'Indisponível',
+                  mono: true,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          SectionCardDs(
+            title: 'Cheque de teste (unidade TEST)',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FilledButton(
+                  onPressed: viewModel.isConnected && !viewModel.isBusy
+                      ? viewModel.sendTestCheque
+                      : null,
+                  child: const Text('Enviar cheque de teste'),
+                ),
+                OutlinedButton(
+                  onPressed: viewModel.isConnected && !viewModel.isBusy
+                      ? viewModel.resendPending
+                      : null,
+                  child: const Text('Reenviar pendente'),
+                ),
+                MetricRowDs(
+                  label: 'Valor',
+                  value:
+                      '${PayerTxLabFlow.testAmountUnits} '
+                      '${PayerTxLabFlow.testUnit}',
+                  mono: true,
+                ),
+                MetricRowDs(
+                  label: 'Estado',
+                  value: TxLabStateLabelHelper.labelFor(viewModel.txState),
+                ),
+                MetricRowDs(
+                  label: 'ID da transação',
+                  value: viewModel.txIdHex ?? 'Indisponível',
                   mono: true,
                 ),
               ],

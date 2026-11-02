@@ -11,6 +11,10 @@ import 'noise/meshpay_core_noise_service.dart';
 import 'noise/noise_service.dart';
 import 'storage/app_support_directory_service.dart';
 import 'storage/path_provider_app_support_directory_service.dart';
+import 'tx/meshpay_core_payer_tx_engine_service.dart';
+import 'tx/meshpay_core_receiver_tx_engine_service.dart';
+import 'tx/payer_tx_engine_service.dart';
+import 'tx/receiver_tx_engine_service.dart';
 
 final coreModule = createModule(
   register: (context) {
@@ -21,6 +25,12 @@ final coreModule = createModule(
       ..addSingleton<NoiseService>(MeshpayCoreNoiseService.new)
       ..addSingleton<AppSupportDirectoryService>(
         PathProviderAppSupportDirectoryService.new,
+      )
+      ..addSingleton<PayerTxEngineService>(
+        MeshpayCorePayerTxEngineService.new,
+      )
+      ..addSingleton<ReceiverTxEngineService>(
+        MeshpayCoreReceiverTxEngineService.new,
       )
       ..addSingleton<ClockLogRepository>(JsonLinesClockLogRepository.new);
   },
