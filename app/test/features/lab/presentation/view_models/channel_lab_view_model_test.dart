@@ -45,6 +45,6 @@ void main() {
     await viewModel.runEchoBenchmark();
 
     expect(viewModel.successCount, 0);
-    expect(viewModel.error, contains('native channel failed'));
+    expect(viewModel.error, 'Ocorreu um erro inesperado. Tente novamente.');
   });
 }

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../../../core/ble/native_lab_service.dart';
 import '../../../../core/clock/clock_log_entry.dart';
 import '../../../../core/clock/clock_log_repository.dart';
+import '../helpers/lab_error_message_helper.dart';
 
 class ClockLabViewModel extends ChangeNotifier {
   ClockLabViewModel(this._nativeService, this._repository);
@@ -48,7 +49,7 @@ class ClockLabViewModel extends ChangeNotifier {
         ...entries,
       ]);
     } on Object catch (failure) {
-      error = failure.toString();
+      error = LabErrorMessageHelper.messageFor(failure);
     } finally {
       isLoading = false;
       _notifyIfActive();
