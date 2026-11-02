@@ -64,4 +64,18 @@ void main() {
 
     expect(L2capFrameCodec.decode(L2capFrameCodec.encode(body)), body);
   });
+
+  test('bodyLengthOf validates the header against the given cap', () {
+    final header = L2capFrameCodec.encode(Uint8List(600)).sublist(0, 4);
+
+    expect(L2capFrameCodec.bodyLengthOf(header), 600);
+    expect(
+      () => L2capFrameCodec.bodyLengthOf(header, maxBodyBytes: 512),
+      throwsFormatException,
+    );
+    expect(
+      () => L2capFrameCodec.bodyLengthOf(Uint8List(3)),
+      throwsFormatException,
+    );
+  });
 }
