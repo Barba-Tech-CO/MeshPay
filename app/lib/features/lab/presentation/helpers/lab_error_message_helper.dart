@@ -3,6 +3,10 @@ import 'package:flutter/services.dart';
 class LabErrorMessageHelper {
   LabErrorMessageHelper._();
 
+  static const String noiseHandshakeMessage =
+      'Falha no handshake Noise: a chave ou os dados do QR não conferem '
+      'com o receptor.';
+
   static const String _genericMessage =
       'Ocorreu um erro inesperado. Tente novamente.';
 

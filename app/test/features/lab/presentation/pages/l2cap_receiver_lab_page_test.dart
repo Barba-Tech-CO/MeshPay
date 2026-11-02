@@ -5,6 +5,7 @@ import 'package:meshpay/features/lab/presentation/pages/l2cap_receiver_lab_page.
 import 'package:meshpay/features/lab/presentation/view_models/l2cap_receiver_lab_view_model.dart';
 
 import '../../../../fakes/fake_native_lab_service.dart';
+import '../../../../fakes/fake_noise_service.dart';
 import '../../../../fakes/fake_permission_service.dart';
 
 void main() {
@@ -14,6 +15,7 @@ void main() {
     final viewModel = L2capReceiverLabViewModel(
       FakeNativeLabService(),
       FakePermissionService(),
+      FakeNoiseService(),
     );
     final module = createModule(register: (_) {});
 
@@ -31,5 +33,16 @@ void main() {
     expect(find.text('Iniciar recepção'), findsOneWidget);
     expect(find.text('Mensagens recebidas'), findsOneWidget);
     expect(find.text('Fechado'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Mensagens (bytes)'),
+      240,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    expect(find.text('Handshake Noise XK'), findsOneWidget);
   });
 }

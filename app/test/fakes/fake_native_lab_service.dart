@@ -56,6 +56,7 @@ class FakeNativeLabService implements NativeLabService {
   bool eventsCancelled = false;
   int _nextChannelId = 1;
   Future<Uint8List> Function(Uint8List data)? _echoHandler;
+  Future<Uint8List?> Function(int channelId, Uint8List data)? l2capResponder;
 
   @override
   Stream<NativeEvent> get events => eventsController.stream;
@@ -161,12 +162,17 @@ class FakeNativeLabService implements NativeLabService {
     if (!_clientChannelIds.contains(channelId)) {
       return;
     }
+    final responder = l2capResponder;
+    final response = responder == null
+        ? Uint8List.fromList(data)
+        : await responder(channelId, Uint8List.fromList(data));
+    if (response == null) {
+      return;
+    }
     eventsController.add(
       L2capDataEvent(
         channelId: channelId,
-        data: mismatchL2capEcho
-            ? Uint8List(data.length)
-            : Uint8List.fromList(data),
+        data: mismatchL2capEcho ? Uint8List(response.length) : response,
       ),
     );
   }

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -10,46 +9,71 @@ import 'package:meshpay_native/native_error_event.dart';
 import 'package:meshpay_native/native_event.dart';
 import 'package:meshpay_native/scan_result_event.dart';
 
-import '../../../../core/ble/l2cap_frame_codec.dart';
 import '../../../../core/ble/native_lab_service.dart';
 import '../../../../core/ble/permission_service.dart';
 import '../../../../core/clock/percentile_helper.dart';
+import '../../../../core/noise/hex_helper.dart';
+import '../../../../core/noise/noise_handshake_status.dart';
+import '../../../../core/noise/noise_l2cap_session.dart';
+import '../../../../core/noise/noise_prologue_helper.dart';
+import '../../../../core/noise/noise_service.dart';
+import '../helpers/bluetooth_lab_helper.dart';
+import '../helpers/l2cap_payer_input_helper.dart';
 import '../helpers/lab_error_message_helper.dart';
 
 class L2capPayerLabViewModel extends ChangeNotifier {
-  L2capPayerLabViewModel(this._nativeService, this._permissionService) {
+  L2capPayerLabViewModel(
+    this._nativeService,
+    this._permissionService,
+    this._noiseService,
+  ) {
     _eventsSubscription = _nativeService.events.listen(
       handleNativeEvent,
       onError: handleNativeStreamError,
     );
   }
 
-  static const int _sessionIdHexLength = 16;
   static const int _echoBodyBytes = 25 * 1024;
   static const int _echoRepetitions = 5;
-  static const Duration _echoTimeout = Duration(seconds: 5);
 
   final NativeLabService _nativeService;
   final PermissionService _permissionService;
+  final NoiseService _noiseService;
   late final StreamSubscription<NativeEvent> _eventsSubscription;
-  final Map<int, Completer<Uint8List>> _pendingEchoes =
-      <int, Completer<Uint8List>>{};
-  final Set<int> _activeChannelIds = <int>{};
+  NoiseL2capSession? _session;
   List<ScanResultEvent> scanResults = const <ScanResultEvent>[];
   String sessionIdHex = '';
   String psm = '';
+  String keyHex = '';
   String deviceId = '';
   String? _scanSessionIdHex;
-  int? connectedChannelId;
   String? connectedDeviceId;
   int successCount = 0;
   double? p50Milliseconds;
   double? p95Milliseconds;
+  List<double> handshakeDurationsMilliseconds = const <double>[];
   bool isScanning = false;
   bool isConnected = false;
   bool isBusy = false;
   String? error;
   bool _isDisposed = false;
+
+  int? get connectedChannelId => isConnected ? _session?.channelId : null;
+
+  NoiseHandshakeStatus get handshakeStatus =>
+      _session?.status ?? NoiseHandshakeStatus.idle;
+
+  List<int> get handshakeMessageSizes =>
+      _session?.messageSizes ?? const <int>[];
+
+  int get handshakeTotalBytes =>
+      handshakeMessageSizes.fold<int>(0, (total, size) => total + size);
+
+  double? get handshakeP50Milliseconds =>
+      PercentileHelper.percentileOrNull(handshakeDurationsMilliseconds, 0.5);
+
+  double? get handshakeP95Milliseconds =>
+      PercentileHelper.percentileOrNull(handshakeDurationsMilliseconds, 0.95);
 
   void updateSessionIdHex(String value) {
     sessionIdHex = value;
@@ -59,6 +83,10 @@ class L2capPayerLabViewModel extends ChangeNotifier {
     psm = value;
   }
 
+  void updateKeyHex(String value) {
+    keyHex = value;
+  }
+
   void updateDeviceId(String value) {
     deviceId = value;
   }
@@ -66,20 +94,10 @@ class L2capPayerLabViewModel extends ChangeNotifier {
   bool handleQrPayload(String payload) {
     error = null;
     try {
-      final decoded = jsonDecode(payload);
-      if (decoded is! Map<String, Object?>) {
-        throw const FormatException('O conteúdo do QR não é um objeto.');
-      }
-      final parsedSessionId = decoded['session'];
-      final parsedPsm = decoded['psm'];
-      if (parsedSessionId is! String || !_isValidSessionId(parsedSessionId)) {
-        throw const FormatException('O ID de sessão do QR é inválido.');
-      }
-      if (parsedPsm is! int || parsedPsm < 1 || parsedPsm > 65535) {
-        throw const FormatException('O PSM do QR é inválido.');
-      }
-      sessionIdHex = parsedSessionId;
-      psm = '$parsedPsm';
+      final input = L2capPayerInputHelper.parseQr(payload);
+      sessionIdHex = input.sessionIdHex;
+      psm = '${input.psm}';
+      keyHex = input.keyHex;
       _notifyIfActive();
       return true;
     } on FormatException catch (failure) {
@@ -93,8 +111,8 @@ class L2capPayerLabViewModel extends ChangeNotifier {
     if (isScanning || isBusy || _isDisposed) {
       return;
     }
-    final currentSessionId = sessionIdHex.trim();
-    if (!_isValidSessionId(currentSessionId)) {
+    final currentSessionId = sessionIdHex.trim().toLowerCase();
+    if (!L2capPayerInputHelper.isValidSessionId(currentSessionId)) {
       error = 'Informe um ID de sessão válido em hexadecimal (8 bytes).';
       _notifyIfActive();
       return;
@@ -109,10 +127,8 @@ class L2capPayerLabViewModel extends ChangeNotifier {
 
     error = null;
     try {
-      await _nativeService.startScan(
-        sessionIdHex: currentSessionId.toLowerCase(),
-      );
-      _scanSessionIdHex = currentSessionId.toLowerCase();
+      await _nativeService.startScan(sessionIdHex: currentSessionId);
+      _scanSessionIdHex = currentSessionId;
       scanResults = const <ScanResultEvent>[];
       isScanning = true;
     } on Object catch (failure) {
@@ -145,15 +161,15 @@ class L2capPayerLabViewModel extends ChangeNotifier {
     if (isBusy || isConnected || _isDisposed) {
       return;
     }
-    final currentSessionId = sessionIdHex.trim();
-    if (!_isValidSessionId(currentSessionId)) {
-      error = 'Informe um ID de sessão válido em hexadecimal (8 bytes).';
-      _notifyIfActive();
-      return;
-    }
-    final parsedPsm = int.tryParse(psm.trim());
-    if (parsedPsm == null || parsedPsm < 1 || parsedPsm > 65535) {
-      error = 'Informe um PSM válido entre 1 e 65535.';
+    final L2capPayerInput input;
+    try {
+      input = L2capPayerInputHelper.parseManual(
+        sessionIdHex: sessionIdHex,
+        psm: psm,
+        keyHex: keyHex,
+      );
+    } on FormatException catch (failure) {
+      error = failure.message;
       _notifyIfActive();
       return;
     }
@@ -175,6 +191,14 @@ class L2capPayerLabViewModel extends ChangeNotifier {
     error = null;
     _notifyIfActive();
     try {
+      final noise = _noiseService.newInitiator(
+        responderPublicKey: HexHelper.decode(input.keyHex),
+        prologue: NoisePrologueHelper.build(
+          sessionIdHex: input.sessionIdHex,
+          psm: input.psm,
+          keyHex: input.keyHex,
+        ),
+      );
       if (isScanning) {
         await _nativeService.stopScan();
         isScanning = false;
@@ -182,12 +206,16 @@ class L2capPayerLabViewModel extends ChangeNotifier {
       }
       final channelId = await _nativeService.openL2cap(
         deviceId: targetDeviceId,
-        psm: parsedPsm,
+        psm: input.psm,
       );
-      connectedChannelId = channelId;
+      final session = NoiseL2capSession(
+        nativeService: _nativeService,
+        channelId: channelId,
+        noise: noise,
+      );
+      _session = session;
       connectedDeviceId = targetDeviceId;
-      _activeChannelIds.add(channelId);
-      isConnected = true;
+      await _runHandshake(session);
     } on Object catch (failure) {
       error = LabErrorMessageHelper.messageFor(failure);
     } finally {
@@ -197,8 +225,13 @@ class L2capPayerLabViewModel extends ChangeNotifier {
   }
 
   Future<void> runEchoBenchmark() async {
-    final channelId = connectedChannelId;
-    if (isBusy || channelId == null || !isConnected || _isDisposed) {
+    final session = _session;
+    if (isBusy ||
+        session == null ||
+        session.isClosed ||
+        !session.isEstablished ||
+        !isConnected ||
+        _isDisposed) {
       error = 'Conecte-se ao receptor antes de iniciar o eco.';
       _notifyIfActive();
       return;
@@ -211,65 +244,29 @@ class L2capPayerLabViewModel extends ChangeNotifier {
     _notifyIfActive();
 
     final body = Uint8List(_echoBodyBytes)..fillRange(0, _echoBodyBytes, 0x5a);
-    final frame = L2capFrameCodec.encode(body);
-    final timings = <num>[];
-    for (var repetition = 0; repetition < _echoRepetitions; repetition++) {
-      if (_isDisposed || !isConnected) {
-        break;
-      }
-      final pendingEcho = Completer<Uint8List>();
-      _pendingEchoes[channelId] = pendingEcho;
-      final echo = pendingEcho.future.timeout(_echoTimeout);
-      final stopwatch = Stopwatch()..start();
-      try {
-        await _nativeService.sendL2cap(channelId: channelId, data: frame);
-        final echoedBody = await echo;
-        if (!listEquals(body, echoedBody)) {
-          throw StateError('Eco incorreto no canal L2CAP $channelId.');
-        }
-        timings.add(stopwatch.elapsedMicroseconds / 1000);
-        successCount++;
-      } on Object catch (failure) {
-        error = LabErrorMessageHelper.messageFor(failure);
-      } finally {
-        stopwatch.stop();
-        _pendingEchoes.remove(channelId);
-      }
-    }
-    if (timings.isNotEmpty) {
-      p50Milliseconds = PercentileHelper.percentile(
-        timings,
-        0.5,
-      ).toDouble();
-      p95Milliseconds = PercentileHelper.percentile(
-        timings,
-        0.95,
-      ).toDouble();
+    final result = await session.measureEncryptedEchoes(
+      body: body,
+      repetitions: _echoRepetitions,
+      shouldContinue: () => !_isDisposed && isConnected,
+    );
+    final timings = result.timingsMilliseconds;
+    successCount = timings.length;
+    p50Milliseconds = PercentileHelper.percentileOrNull(timings, 0.5);
+    p95Milliseconds = PercentileHelper.percentileOrNull(timings, 0.95);
+    if (result.failure case final failure?) {
+      error ??= LabErrorMessageHelper.messageFor(failure);
+      await _teardown(session);
     }
     isBusy = false;
     _notifyIfActive();
   }
 
   Future<void> close() async {
-    final channelId = connectedChannelId;
-    if (channelId == null) {
+    final session = _session;
+    if (session == null) {
       return;
     }
-    final pendingEcho = _pendingEchoes.remove(channelId);
-    if (pendingEcho != null && !pendingEcho.isCompleted) {
-      pendingEcho.completeError(
-        StateError('O canal L2CAP foi fechado antes do eco.'),
-      );
-    }
-    try {
-      await _nativeService.closeL2cap(channelId: channelId);
-      connectedChannelId = null;
-      connectedDeviceId = null;
-      isConnected = false;
-      _activeChannelIds.remove(channelId);
-    } on Object catch (failure) {
-      error = LabErrorMessageHelper.messageFor(failure);
-    }
+    await _teardown(session);
     _notifyIfActive();
   }
 
@@ -278,9 +275,7 @@ class L2capPayerLabViewModel extends ChangeNotifier {
       case ScanResultEvent():
         _recordScanResult(event);
       case L2capOpenedEvent():
-        if (event.role == 'client') {
-          _activeChannelIds.add(event.channelId);
-        }
+        break;
       case L2capDataEvent():
         _handleL2capData(event);
       case L2capClosedEvent():
@@ -290,11 +285,9 @@ class L2capPayerLabViewModel extends ChangeNotifier {
           PlatformException(code: event.code, message: event.message),
         );
         error = message;
-        if (event.channelId case final channelId?) {
-          final pending = _pendingEchoes.remove(channelId);
-          if (pending != null && !pending.isCompleted) {
-            pending.completeError(StateError(message));
-          }
+        final session = _session;
+        if (session != null && session.channelId == event.channelId) {
+          session.failPending(StateError(message));
         }
     }
     _notifyIfActive();
@@ -305,6 +298,33 @@ class L2capPayerLabViewModel extends ChangeNotifier {
     _notifyIfActive();
   }
 
+  Future<void> _runHandshake(NoiseL2capSession session) async {
+    final stopwatch = Stopwatch()..start();
+    try {
+      await session.runInitiatorHandshake();
+      stopwatch.stop();
+      handshakeDurationsMilliseconds = <double>[
+        ...handshakeDurationsMilliseconds,
+        stopwatch.elapsedMicroseconds / 1000,
+      ];
+      isConnected = true;
+    } on Object {
+      session.markFailed();
+      await _teardown(session);
+      error = LabErrorMessageHelper.noiseHandshakeMessage;
+    }
+  }
+
+  Future<void> _teardown(NoiseL2capSession session) async {
+    isConnected = false;
+    connectedDeviceId = null;
+    try {
+      await session.close();
+    } on Object catch (failure) {
+      error = LabErrorMessageHelper.messageFor(failure);
+    }
+  }
+
   void _recordScanResult(ScanResultEvent event) {
     final scanSessionIdHex = _scanSessionIdHex;
     if (!isScanning ||
@@ -312,69 +332,38 @@ class L2capPayerLabViewModel extends ChangeNotifier {
         event.sessionIdHex.toLowerCase() != scanSessionIdHex) {
       return;
     }
-    final updatedResults = List<ScanResultEvent>.of(scanResults);
-    final previousIndex = updatedResults.indexWhere(
-      (result) => result.deviceId == event.deviceId,
-    );
-    if (previousIndex < 0) {
-      updatedResults.add(event);
-    } else {
-      updatedResults[previousIndex] = event;
-    }
-    scanResults = List<ScanResultEvent>.unmodifiable(updatedResults);
+    scanResults = BluetoothLabHelper.upsertScanResult(scanResults, event);
   }
 
   void _handleL2capData(L2capDataEvent event) {
-    final pending = _pendingEchoes[event.channelId];
-    if (pending == null || pending.isCompleted) {
+    final session = _session;
+    if (session == null ||
+        session.isClosed ||
+        session.channelId != event.channelId) {
       return;
     }
     try {
-      pending.complete(L2capFrameCodec.decode(event.data));
+      session.deliver(event.data);
     } on FormatException catch (failure) {
-      pending.completeError(
-        StateError('Quadro de eco inválido: ${failure.message}'),
-      );
+      error = 'Quadro inválido: ${failure.message}';
+      session.failPending(StateError(error!));
+      unawaited(_teardown(session));
     }
   }
 
   void _handleL2capClosed(int channelId) {
-    _activeChannelIds.remove(channelId);
-    if (connectedChannelId == channelId) {
-      connectedChannelId = null;
-      connectedDeviceId = null;
-      isConnected = false;
+    final session = _session;
+    if (session == null || session.channelId != channelId) {
+      return;
     }
-    final pending = _pendingEchoes.remove(channelId);
-    if (pending != null && !pending.isCompleted) {
-      pending.completeError(
-        StateError('O canal L2CAP foi fechado antes do eco.'),
-      );
-    }
+    session.onRemoteClosed();
+    isConnected = false;
+    connectedDeviceId = null;
   }
 
   Future<bool> _hasBluetoothPermissions() async {
-    try {
-      if (await _permissionService.hasBluetoothPermissions()) {
-        return true;
-      }
-      error = 'Conceda as permissões de Bluetooth antes de continuar.';
-    } on Object catch (failure) {
-      error = LabErrorMessageHelper.messageFor(failure);
-    }
-    return false;
-  }
-
-  bool _isValidSessionId(String value) {
-    if (value.length != _sessionIdHexLength) {
-      return false;
-    }
-    return value.codeUnits.every(
-      (codeUnit) =>
-          (codeUnit >= 48 && codeUnit <= 57) ||
-          (codeUnit >= 65 && codeUnit <= 70) ||
-          (codeUnit >= 97 && codeUnit <= 102),
-    );
+    error = await BluetoothLabHelper.permissionError(_permissionService);
+    return error == null;
   }
 
   void _notifyIfActive() {
@@ -387,33 +376,18 @@ class L2capPayerLabViewModel extends ChangeNotifier {
   void dispose() {
     _isDisposed = true;
     unawaited(_eventsSubscription.cancel());
-    for (final pending in _pendingEchoes.values) {
-      if (!pending.isCompleted) {
-        pending.completeError(StateError('A tela do pagador foi fechada.'));
-      }
-    }
+    final session = _session;
     final cleanup = <Future<void>>[
       if (isScanning) _nativeService.stopScan(),
-      for (final channelId in _activeChannelIds)
-        _nativeService.closeL2cap(channelId: channelId),
+      if (session != null) session.close(),
     ];
     if (cleanup.isNotEmpty) {
       unawaited(
         Future.wait<void>(cleanup)
             .then<void>((_) {})
-            .catchError(_reportCleanupError),
+            .catchError(BluetoothLabHelper.reportCleanupError),
       );
     }
     super.dispose();
-  }
-
-  void _reportCleanupError(Object failure, StackTrace stackTrace) {
-    FlutterError.reportError(
-      FlutterErrorDetails(
-        exception: failure,
-        stack: stackTrace,
-        context: ErrorDescription('while stopping the L2CAP payer'),
-      ),
-    );
   }
 }

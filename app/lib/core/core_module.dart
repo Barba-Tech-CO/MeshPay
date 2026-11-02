@@ -7,6 +7,8 @@ import 'ble/permission_handler_service.dart';
 import 'ble/permission_service.dart';
 import 'clock/clock_log_repository.dart';
 import 'clock/json_lines_clock_log_repository.dart';
+import 'noise/meshpay_core_noise_service.dart';
+import 'noise/noise_service.dart';
 import 'storage/app_support_directory_service.dart';
 import 'storage/path_provider_app_support_directory_service.dart';
 
@@ -16,6 +18,7 @@ final coreModule = createModule(
       ..addSingleton<MeshpayNative>(MeshpayNative.new)
       ..addSingleton<NativeLabService>(MeshpayNativeLabService.new)
       ..addSingleton<PermissionService>(PermissionHandlerService.new)
+      ..addSingleton<NoiseService>(MeshpayCoreNoiseService.new)
       ..addSingleton<AppSupportDirectoryService>(
         PathProviderAppSupportDirectoryService.new,
       )

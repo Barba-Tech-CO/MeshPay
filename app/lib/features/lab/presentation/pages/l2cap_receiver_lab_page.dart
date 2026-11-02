@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../helpers/noise_handshake_label_helper.dart';
 import '../view_models/l2cap_receiver_lab_view_model.dart';
 
 class L2capReceiverLabPage extends StatelessWidget {
@@ -16,6 +17,10 @@ class L2capReceiverLabPage extends StatelessWidget {
       L2capReceiverStatus.listening => 'Ouvindo',
       L2capReceiverStatus.connected => 'Conectado',
     };
+
+    final handshakeLabel = NoiseHandshakeLabelHelper.labelFor(
+      viewModel.handshakeStatus,
+    );
 
     return Scaffold(
       appBar: AppBar(title: const Text('Receptor L2CAP')),
@@ -36,6 +41,11 @@ class L2capReceiverLabPage extends StatelessWidget {
                 MetricRowDs(
                   label: 'ID da sessão',
                   value: viewModel.sessionIdHex ?? 'Ainda não gerado',
+                  mono: true,
+                ),
+                MetricRowDs(
+                  label: 'Chave pública (hex)',
+                  value: viewModel.keyHex ?? 'Ainda não gerada',
                   mono: true,
                 ),
                 const SizedBox(height: 8),
@@ -70,6 +80,23 @@ class L2capReceiverLabPage extends StatelessWidget {
               ),
             ),
           ],
+          const SizedBox(height: 16),
+          SectionCardDs(
+            title: 'Handshake Noise XK',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                MetricRowDs(label: 'Estado', value: handshakeLabel),
+                MetricRowDs(
+                  label: 'Mensagens (bytes)',
+                  value: viewModel.handshakeMessageSizes.isEmpty
+                      ? 'Indisponível'
+                      : viewModel.handshakeMessageSizes.join(' / '),
+                  mono: true,
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 16),
           SectionCardDs(
             title: 'Registro do eco',

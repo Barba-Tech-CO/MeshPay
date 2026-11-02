@@ -5,6 +5,7 @@ import 'package:meshpay/features/lab/presentation/pages/l2cap_payer_lab_page.dar
 import 'package:meshpay/features/lab/presentation/view_models/l2cap_payer_lab_view_model.dart';
 
 import '../../../../fakes/fake_native_lab_service.dart';
+import '../../../../fakes/fake_noise_service.dart';
 import '../../../../fakes/fake_permission_service.dart';
 
 void main() {
@@ -14,6 +15,7 @@ void main() {
     final viewModel = L2capPayerLabViewModel(
       FakeNativeLabService(),
       FakePermissionService(),
+      FakeNoiseService(),
     );
     final module = createModule(register: (_) {});
 
@@ -31,6 +33,7 @@ void main() {
     expect(find.text('Ler QR do receptor'), findsOneWidget);
     expect(find.text('ID da sessão (hex)'), findsOneWidget);
     expect(find.text('PSM'), findsOneWidget);
+    expect(find.text('Chave pública do receptor (hex)'), findsOneWidget);
     expect(find.text('ID do dispositivo'), findsOneWidget);
 
     await tester.scrollUntilVisible(
