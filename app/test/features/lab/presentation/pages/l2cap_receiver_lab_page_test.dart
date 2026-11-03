@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:meshpay/features/lab/presentation/pages/l2cap_receiver_lab_page.dart';
 import 'package:meshpay/features/lab/presentation/view_models/l2cap_receiver_lab_view_model.dart';
 
+import '../../../../fakes/fake_dtn_buffer_service.dart';
 import '../../../../fakes/fake_native_lab_service.dart';
 import '../../../../fakes/fake_noise_service.dart';
 import '../../../../fakes/fake_permission_service.dart';
@@ -18,6 +19,7 @@ void main() {
       FakePermissionService(),
       FakeNoiseService(),
       FakeReceiverTxEngineService(),
+      FakeDtnBufferService(),
     );
     final module = createModule(register: (_) {});
 

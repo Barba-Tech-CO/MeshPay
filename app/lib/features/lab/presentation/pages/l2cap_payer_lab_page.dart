@@ -4,6 +4,7 @@ import 'package:flutter_modular/flutter_modular.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../../../core/tx/payer_tx_lab_flow.dart';
+import '../helpers/dtn_gossip_stats_label_helper.dart';
 import '../helpers/noise_handshake_label_helper.dart';
 import '../helpers/tx_lab_state_label_helper.dart';
 import '../view_models/l2cap_payer_lab_view_model.dart';
@@ -255,6 +256,35 @@ class _L2capPayerLabPageState extends State<L2capPayerLabPage> {
                   value: viewModel.txIdHex ?? 'Indisponível',
                   mono: true,
                 ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          SectionCardDs(
+            title: 'Gossip DTN',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FilledButton(
+                  onPressed: viewModel.isBusy
+                      ? null
+                      : viewModel.createTestEnvelope,
+                  child: const Text('Criar envelope de teste'),
+                ),
+                OutlinedButton(
+                  onPressed: viewModel.isConnected && !viewModel.isBusy
+                      ? viewModel.syncDtn
+                      : null,
+                  child: const Text('Sincronizar (gossip)'),
+                ),
+                for (final row in DtnGossipStatsLabelHelper.rowsFor(
+                  viewModel.dtnStats,
+                ))
+                  MetricRowDs(
+                    label: row.label,
+                    value: row.value,
+                    mono: true,
+                  ),
               ],
             ),
           ),
