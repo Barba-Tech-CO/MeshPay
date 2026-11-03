@@ -97,3 +97,40 @@ async fn concurrent_deposits_pay_exactly_once() {
     );
   }
 }
+
+/// PV-NET-04 lock order: deposits lock only the payer row, so A paying B while B pays A must not
+/// deadlock on the two balance rows (every ledger write takes `supply` before `balances`).
+#[tokio::test]
+async fn opposite_direction_deposits_never_deadlock() {
+  let Some(app) = setup(true).await else { return };
+  let app = Arc::new(app);
+  for _ in 0..5 {
+    let (a, b) = (Client::new(), Client::new());
+    a.register(&app).await;
+    b.register(&app).await;
+    let mut jobs: Vec<(ChequeStub, ChequeSpend)> = Vec::new();
+    for (payer, payee) in [(&a, &b), (&b, &a)] {
+      let (_, book) = payer.issue(&app, random_bytes(16), 10, 1, 600).await;
+      for (counter, stub) in (1..).zip(book.expect("issue").stubs) {
+        let spend = payer.spend(&stub, &payee.account_id, 1, counter);
+        jobs.push((stub, spend));
+      }
+    }
+    let barrier = Arc::new(Barrier::new(jobs.len()));
+    let mut set = JoinSet::new();
+    for (stub, spend) in jobs {
+      let (app, barrier) = (app.clone(), barrier.clone());
+      set.spawn(async move {
+        barrier.wait().await;
+        app.deposit(&stub, &spend).await.status
+      });
+    }
+    while let Some(status) = set.join_next().await {
+      assert_eq!(status.unwrap(), RedeemStatus::Paid as i32);
+    }
+    for client in [&a, &b] {
+      let (available, reserved) = app.balance(&client.account_id).await;
+      assert_eq!(available + reserved, 10_000);
+    }
+  }
+}
