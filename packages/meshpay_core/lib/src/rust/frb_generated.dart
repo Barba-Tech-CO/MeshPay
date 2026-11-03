@@ -70,7 +70,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 206241451;
+  int get rustContentHash => -2032442019;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -85,6 +85,12 @@ abstract class RustLibApi extends BaseApi {
   Future<List<Uint8List>> crateApiDtnBufferEnvelopesFor({
     required DtnBuffer that,
     required List<Uint8List> ids,
+  });
+
+  Future<bool> crateApiDtnBufferIngestLocal({
+    required DtnBuffer that,
+    required List<int> envelope,
+    required BigInt nowUnix,
   });
 
   Future<BigInt> crateApiDtnBufferIngestSnapshot({
@@ -104,7 +110,10 @@ abstract class RustLibApi extends BaseApi {
     required int maxIngestPerMinute,
   });
 
-  DtnSession crateApiDtnBufferOpenSession({required DtnBuffer that});
+  DtnSession crateApiDtnBufferOpenSession({
+    required DtnBuffer that,
+    required List<int> originPair,
+  });
 
   Future<Uint8List?> crateApiDtnBufferSnapshotBytes({required DtnBuffer that});
 
@@ -142,6 +151,8 @@ abstract class RustLibApi extends BaseApi {
     required List<int> localPrivateKey,
     required List<int> prologue,
   });
+
+  Uint8List crateApiNoiseSessionPeerPairKey({required NoiseSession that});
 
   Future<Uint8List> crateApiNoiseSessionReadMessage({
     required NoiseSession that,
@@ -189,6 +200,7 @@ abstract class RustLibApi extends BaseApi {
     required List<int> spendBody,
     required BigInt counter,
     required List<int> recipientId,
+    required List<int> stub,
   });
 
   Future<Uint8List> crateApiPayerTxEnginePropose({
@@ -196,6 +208,7 @@ abstract class RustLibApi extends BaseApi {
     required List<int> spendBody,
     required BigInt counter,
     required List<int> recipientId,
+    required List<int> stub,
   });
 
   Future<List<Uint8List>> crateApiPayerTxEngineResumePending({
@@ -208,9 +221,18 @@ abstract class RustLibApi extends BaseApi {
     required List<int> signature,
   });
 
+  Future<BigInt> crateApiReceiverTxEngineInstallSnapshot({
+    required ReceiverTxEngine that,
+    required List<int> snapshot,
+    required BigInt monotonicNanos,
+    BigInt? bootCount,
+  });
+
   Future<Uint8List> crateApiReceiverTxEngineOnPropose({
     required ReceiverTxEngine that,
     required List<int> propose,
+    required BigInt monotonicNanos,
+    BigInt? bootCount,
   });
 
   Future<ReceiverTxEngine> crateApiReceiverTxEngineOpen({
@@ -219,6 +241,8 @@ abstract class RustLibApi extends BaseApi {
     required List<int> signingSeed,
     required List<int> payerPublicKey,
     required List<int> ownAccountId,
+    required List<int> snapshotPublicKey,
+    required BigInt expirySecs,
   });
 
   Future<ReceiverTxEngine> crateApiReceiverTxEngineOpenExternal({
@@ -227,6 +251,8 @@ abstract class RustLibApi extends BaseApi {
     required List<int> ownPublicKey,
     required List<int> payerPublicKey,
     required List<int> ownAccountId,
+    required List<int> snapshotPublicKey,
+    required BigInt expirySecs,
   });
 
   Future<PreparedAck> crateApiReceiverTxEnginePrepareAck({
@@ -237,6 +263,8 @@ abstract class RustLibApi extends BaseApi {
   Future<Uint8List> crateApiReceiverTxEngineStorePropose({
     required ReceiverTxEngine that,
     required List<int> propose,
+    required BigInt monotonicNanos,
+    BigInt? bootCount,
   });
 
   Uint8List crateApiBuildDtnEnvelope({
@@ -348,6 +376,46 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<bool> crateApiDtnBufferIngestLocal({
+    required DtnBuffer that,
+    required List<int> envelope,
+    required BigInt nowUnix,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDtnBuffer(
+            that,
+            serializer,
+          );
+          sse_encode_list_prim_u_8_loose(envelope, serializer);
+          sse_encode_u_64(nowUnix, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 2,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiDtnBufferIngestLocalConstMeta,
+        argValues: [that, envelope, nowUnix],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiDtnBufferIngestLocalConstMeta =>
+      const TaskConstMeta(
+        debugName: "DtnBuffer_ingest_local",
+        argNames: ["that", "envelope", "nowUnix"],
+      );
+
+  @override
   Future<BigInt> crateApiDtnBufferIngestSnapshot({
     required DtnBuffer that,
     required List<int> snapshot,
@@ -364,7 +432,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 2,
+            funcId: 3,
             port: port_,
           );
         },
@@ -402,7 +470,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 3,
+            funcId: 4,
             port: port_,
           );
         },
@@ -441,7 +509,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 4,
+            funcId: 5,
             port: port_,
           );
         },
@@ -463,7 +531,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  DtnSession crateApiDtnBufferOpenSession({required DtnBuffer that}) {
+  DtnSession crateApiDtnBufferOpenSession({
+    required DtnBuffer that,
+    required List<int> originPair,
+  }) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
@@ -472,7 +543,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
+          sse_encode_list_prim_u_8_loose(originPair, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
         },
         codec: SseCodec(
           decodeSuccessData:
@@ -480,7 +552,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: null,
         ),
         constMeta: kCrateApiDtnBufferOpenSessionConstMeta,
-        argValues: [that],
+        argValues: [that, originPair],
         apiImpl: this,
       ),
     );
@@ -489,7 +561,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiDtnBufferOpenSessionConstMeta =>
       const TaskConstMeta(
         debugName: "DtnBuffer_open_session",
-        argNames: ["that"],
+        argNames: ["that", "originPair"],
       );
 
   @override
@@ -505,7 +577,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 7,
             port: port_,
           );
         },
@@ -539,7 +611,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 7,
+            funcId: 8,
             port: port_,
           );
         },
@@ -574,7 +646,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 9,
             port: port_,
           );
         },
@@ -613,7 +685,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 10,
             port: port_,
           );
         },
@@ -650,7 +722,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 11,
             port: port_,
           );
         },
@@ -688,7 +760,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 12,
             port: port_,
           );
         },
@@ -719,7 +791,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 13)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
@@ -749,7 +821,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_list_prim_u_8_loose(responderPublicKey, serializer);
           sse_encode_list_prim_u_8_loose(prologue, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 13)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 14)!;
         },
         codec: SseCodec(
           decodeSuccessData:
@@ -780,7 +852,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_list_prim_u_8_loose(localPrivateKey, serializer);
           sse_encode_list_prim_u_8_loose(prologue, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 14)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 15)!;
         },
         codec: SseCodec(
           decodeSuccessData:
@@ -801,6 +873,35 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Uint8List crateApiNoiseSessionPeerPairKey({required NoiseSession that}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerNoiseSession(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_u_8_strict,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiNoiseSessionPeerPairKeyConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiNoiseSessionPeerPairKeyConstMeta =>
+      const TaskConstMeta(
+        debugName: "NoiseSession_peer_pair_key",
+        argNames: ["that"],
+      );
+
+  @override
   Future<Uint8List> crateApiNoiseSessionReadMessage({
     required NoiseSession that,
     required List<int> message,
@@ -817,7 +918,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 17,
             port: port_,
           );
         },
@@ -855,7 +956,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 16,
+            funcId: 18,
             port: port_,
           );
         },
@@ -895,7 +996,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 19,
             port: port_,
           );
         },
@@ -935,7 +1036,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 18,
+            funcId: 20,
             port: port_,
           );
         },
@@ -973,7 +1074,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 19,
+            funcId: 21,
             port: port_,
           );
         },
@@ -1011,7 +1112,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 20,
+            funcId: 22,
             port: port_,
           );
         },
@@ -1050,7 +1151,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 21,
+            funcId: 23,
             port: port_,
           );
         },
@@ -1078,6 +1179,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required List<int> spendBody,
     required BigInt counter,
     required List<int> recipientId,
+    required List<int> stub,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -1090,10 +1192,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_list_prim_u_8_loose(spendBody, serializer);
           sse_encode_u_64(counter, serializer);
           sse_encode_list_prim_u_8_loose(recipientId, serializer);
+          sse_encode_list_prim_u_8_loose(stub, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 22,
+            funcId: 24,
             port: port_,
           );
         },
@@ -1102,7 +1205,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiPayerTxEnginePrepareProposeConstMeta,
-        argValues: [that, spendBody, counter, recipientId],
+        argValues: [that, spendBody, counter, recipientId, stub],
         apiImpl: this,
       ),
     );
@@ -1111,7 +1214,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiPayerTxEnginePrepareProposeConstMeta =>
       const TaskConstMeta(
         debugName: "PayerTxEngine_prepare_propose",
-        argNames: ["that", "spendBody", "counter", "recipientId"],
+        argNames: ["that", "spendBody", "counter", "recipientId", "stub"],
       );
 
   @override
@@ -1120,6 +1223,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required List<int> spendBody,
     required BigInt counter,
     required List<int> recipientId,
+    required List<int> stub,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -1132,10 +1236,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_list_prim_u_8_loose(spendBody, serializer);
           sse_encode_u_64(counter, serializer);
           sse_encode_list_prim_u_8_loose(recipientId, serializer);
+          sse_encode_list_prim_u_8_loose(stub, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 23,
+            funcId: 25,
             port: port_,
           );
         },
@@ -1144,7 +1249,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiPayerTxEngineProposeConstMeta,
-        argValues: [that, spendBody, counter, recipientId],
+        argValues: [that, spendBody, counter, recipientId, stub],
         apiImpl: this,
       ),
     );
@@ -1153,7 +1258,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiPayerTxEngineProposeConstMeta =>
       const TaskConstMeta(
         debugName: "PayerTxEngine_propose",
-        argNames: ["that", "spendBody", "counter", "recipientId"],
+        argNames: ["that", "spendBody", "counter", "recipientId", "stub"],
       );
 
   @override
@@ -1171,7 +1276,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 24,
+            funcId: 26,
             port: port_,
           );
         },
@@ -1211,7 +1316,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 25,
+            funcId: 27,
             port: port_,
           );
         },
@@ -1233,9 +1338,53 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<BigInt> crateApiReceiverTxEngineInstallSnapshot({
+    required ReceiverTxEngine that,
+    required List<int> snapshot,
+    required BigInt monotonicNanos,
+    BigInt? bootCount,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReceiverTxEngine(
+            that,
+            serializer,
+          );
+          sse_encode_list_prim_u_8_loose(snapshot, serializer);
+          sse_encode_u_64(monotonicNanos, serializer);
+          sse_encode_opt_box_autoadd_u_64(bootCount, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 28,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_64,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiReceiverTxEngineInstallSnapshotConstMeta,
+        argValues: [that, snapshot, monotonicNanos, bootCount],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiReceiverTxEngineInstallSnapshotConstMeta =>
+      const TaskConstMeta(
+        debugName: "ReceiverTxEngine_install_snapshot",
+        argNames: ["that", "snapshot", "monotonicNanos", "bootCount"],
+      );
+
+  @override
   Future<Uint8List> crateApiReceiverTxEngineOnPropose({
     required ReceiverTxEngine that,
     required List<int> propose,
+    required BigInt monotonicNanos,
+    BigInt? bootCount,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -1246,10 +1395,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_list_prim_u_8_loose(propose, serializer);
+          sse_encode_u_64(monotonicNanos, serializer);
+          sse_encode_opt_box_autoadd_u_64(bootCount, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 26,
+            funcId: 29,
             port: port_,
           );
         },
@@ -1258,7 +1409,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiReceiverTxEngineOnProposeConstMeta,
-        argValues: [that, propose],
+        argValues: [that, propose, monotonicNanos, bootCount],
         apiImpl: this,
       ),
     );
@@ -1267,7 +1418,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiReceiverTxEngineOnProposeConstMeta =>
       const TaskConstMeta(
         debugName: "ReceiverTxEngine_on_propose",
-        argNames: ["that", "propose"],
+        argNames: ["that", "propose", "monotonicNanos", "bootCount"],
       );
 
   @override
@@ -1277,6 +1428,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required List<int> signingSeed,
     required List<int> payerPublicKey,
     required List<int> ownAccountId,
+    required List<int> snapshotPublicKey,
+    required BigInt expirySecs,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -1287,10 +1440,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_list_prim_u_8_loose(signingSeed, serializer);
           sse_encode_list_prim_u_8_loose(payerPublicKey, serializer);
           sse_encode_list_prim_u_8_loose(ownAccountId, serializer);
+          sse_encode_list_prim_u_8_loose(snapshotPublicKey, serializer);
+          sse_encode_u_64(expirySecs, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 27,
+            funcId: 30,
             port: port_,
           );
         },
@@ -1300,7 +1455,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiReceiverTxEngineOpenConstMeta,
-        argValues: [dbPath, dbKey, signingSeed, payerPublicKey, ownAccountId],
+        argValues: [
+          dbPath,
+          dbKey,
+          signingSeed,
+          payerPublicKey,
+          ownAccountId,
+          snapshotPublicKey,
+          expirySecs,
+        ],
         apiImpl: this,
       ),
     );
@@ -1315,6 +1478,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           "signingSeed",
           "payerPublicKey",
           "ownAccountId",
+          "snapshotPublicKey",
+          "expirySecs",
         ],
       );
 
@@ -1325,6 +1490,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required List<int> ownPublicKey,
     required List<int> payerPublicKey,
     required List<int> ownAccountId,
+    required List<int> snapshotPublicKey,
+    required BigInt expirySecs,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -1335,10 +1502,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_list_prim_u_8_loose(ownPublicKey, serializer);
           sse_encode_list_prim_u_8_loose(payerPublicKey, serializer);
           sse_encode_list_prim_u_8_loose(ownAccountId, serializer);
+          sse_encode_list_prim_u_8_loose(snapshotPublicKey, serializer);
+          sse_encode_u_64(expirySecs, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 28,
+            funcId: 31,
             port: port_,
           );
         },
@@ -1348,7 +1517,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiReceiverTxEngineOpenExternalConstMeta,
-        argValues: [dbPath, dbKey, ownPublicKey, payerPublicKey, ownAccountId],
+        argValues: [
+          dbPath,
+          dbKey,
+          ownPublicKey,
+          payerPublicKey,
+          ownAccountId,
+          snapshotPublicKey,
+          expirySecs,
+        ],
         apiImpl: this,
       ),
     );
@@ -1363,6 +1540,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           "ownPublicKey",
           "payerPublicKey",
           "ownAccountId",
+          "snapshotPublicKey",
+          "expirySecs",
         ],
       );
 
@@ -1383,7 +1562,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 29,
+            funcId: 32,
             port: port_,
           );
         },
@@ -1408,6 +1587,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Future<Uint8List> crateApiReceiverTxEngineStorePropose({
     required ReceiverTxEngine that,
     required List<int> propose,
+    required BigInt monotonicNanos,
+    BigInt? bootCount,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -1418,10 +1599,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_list_prim_u_8_loose(propose, serializer);
+          sse_encode_u_64(monotonicNanos, serializer);
+          sse_encode_opt_box_autoadd_u_64(bootCount, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 30,
+            funcId: 33,
             port: port_,
           );
         },
@@ -1430,7 +1613,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiReceiverTxEngineStoreProposeConstMeta,
-        argValues: [that, propose],
+        argValues: [that, propose, monotonicNanos, bootCount],
         apiImpl: this,
       ),
     );
@@ -1439,7 +1622,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiReceiverTxEngineStoreProposeConstMeta =>
       const TaskConstMeta(
         debugName: "ReceiverTxEngine_store_propose",
-        argNames: ["that", "propose"],
+        argNames: ["that", "propose", "monotonicNanos", "bootCount"],
       );
 
   @override
@@ -1457,7 +1640,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_u_64(createdAtUnix, serializer);
           sse_encode_u_32(ttlHops, serializer);
           sse_encode_u_64(knownRevocationVersion, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 31)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 34)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_prim_u_8_strict,
@@ -1495,7 +1678,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 32,
+            funcId: 35,
             port: port_,
           );
         },
@@ -1521,7 +1704,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 33)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 36)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -1547,7 +1730,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 34,
+            funcId: 37,
             port: port_,
           );
         },
@@ -1574,7 +1757,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 35,
+            funcId: 38,
             port: port_,
           );
         },
@@ -1598,7 +1781,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 36)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 39)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_noise_keypair,
@@ -1624,7 +1807,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_u_32(n, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 37)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 40)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_u_32,
@@ -1843,6 +2026,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BigInt dco_decode_box_autoadd_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_u_64(raw);
+  }
+
+  @protected
   CoreSelfcheck dco_decode_core_selfcheck(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -1901,6 +2090,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_u_64(raw);
+  }
+
+  @protected
   Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_list_prim_u_8_strict(raw);
@@ -1923,13 +2118,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PreparedPropose dco_decode_prepared_propose(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return PreparedPropose(
       message: dco_decode_list_prim_u_8_strict(arr[0]),
       body: dco_decode_list_prim_u_8_strict(arr[1]),
-      counter: dco_decode_u_64(arr[2]),
-      existingPropose: dco_decode_opt_list_prim_u_8_strict(arr[3]),
+      stub: dco_decode_list_prim_u_8_strict(arr[2]),
+      counter: dco_decode_u_64(arr[3]),
+      existingPropose: dco_decode_opt_list_prim_u_8_strict(arr[4]),
     );
   }
 
@@ -2177,6 +2373,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_u_64(deserializer));
+  }
+
+  @protected
   CoreSelfcheck sse_decode_core_selfcheck(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_sqlcipherOpensWithKey = sse_decode_bool(deserializer);
@@ -2240,6 +2442,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_u_64(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -2268,11 +2481,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_message = sse_decode_list_prim_u_8_strict(deserializer);
     var var_body = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_stub = sse_decode_list_prim_u_8_strict(deserializer);
     var var_counter = sse_decode_u_64(deserializer);
     var var_existingPropose = sse_decode_opt_list_prim_u_8_strict(deserializer);
     return PreparedPropose(
       message: var_message,
       body: var_body,
+      stub: var_stub,
       counter: var_counter,
       existingPropose: var_existingPropose,
     );
@@ -2543,6 +2758,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self, serializer);
+  }
+
+  @protected
   void sse_encode_core_selfcheck(CoreSelfcheck self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_bool(self.sqlcipherOpensWithKey, serializer);
@@ -2605,6 +2826,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_u_64(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_list_prim_u_8_strict(
     Uint8List? self,
     SseSerializer serializer,
@@ -2633,6 +2864,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_list_prim_u_8_strict(self.message, serializer);
     sse_encode_list_prim_u_8_strict(self.body, serializer);
+    sse_encode_list_prim_u_8_strict(self.stub, serializer);
     sse_encode_u_64(self.counter, serializer);
     sse_encode_opt_list_prim_u_8_strict(self.existingPropose, serializer);
   }
@@ -2696,6 +2928,16 @@ class DtnBufferImpl extends RustOpaque implements DtnBuffer {
   Future<List<Uint8List>> envelopesFor({required List<Uint8List> ids}) =>
       RustLib.instance.api.crateApiDtnBufferEnvelopesFor(that: this, ids: ids);
 
+  /// Stores an envelope created on this device (not from a peer, so no pair cap).
+  Future<bool> ingestLocal({
+    required List<int> envelope,
+    required BigInt nowUnix,
+  }) => RustLib.instance.api.crateApiDtnBufferIngestLocal(
+    that: this,
+    envelope: envelope,
+    nowUnix: nowUnix,
+  );
+
   /// Stores a `RevocationSnapshot` only if signed by the SNAPSHOT key and newer; returns its version.
   Future<BigInt> ingestSnapshot({required List<int> snapshot}) => RustLib
       .instance
@@ -2710,8 +2952,12 @@ class DtnBufferImpl extends RustOpaque implements DtnBuffer {
       );
 
   /// One session per connected peer; all inbound envelopes go through it (20 per connection).
-  DtnSession openSession() =>
-      RustLib.instance.api.crateApiDtnBufferOpenSession(that: this);
+  /// `origin_pair` is `NoiseSession::peer_pair_key` of the authenticated link: envelopes count
+  /// toward that pair's daily cap.
+  DtnSession openSession({required List<int> originPair}) => RustLib
+      .instance
+      .api
+      .crateApiDtnBufferOpenSession(that: this, originPair: originPair);
 
   Future<Uint8List?> snapshotBytes() =>
       RustLib.instance.api.crateApiDtnBufferSnapshotBytes(that: this);
@@ -2786,6 +3032,11 @@ class NoiseSessionImpl extends RustOpaque implements NoiseSession {
   bool isFinished() =>
       RustLib.instance.api.crateApiNoiseSessionIsFinished(that: this);
 
+  /// Initiator static key || responder static key of the finished handshake: the same bytes on
+  /// both ends, authenticated by Noise. Key for `DtnBuffer::open_session`.
+  Uint8List peerPairKey() =>
+      RustLib.instance.api.crateApiNoiseSessionPeerPairKey(that: this);
+
   Future<Uint8List> readMessage({required List<int> message}) => RustLib
       .instance
       .api
@@ -2845,11 +3096,13 @@ class PayerTxEngineImpl extends RustOpaque implements PayerTxEngine {
     required List<int> spendBody,
     required BigInt counter,
     required List<int> recipientId,
+    required List<int> stub,
   }) => RustLib.instance.api.crateApiPayerTxEnginePreparePropose(
     that: this,
     spendBody: spendBody,
     counter: counter,
     recipientId: recipientId,
+    stub: stub,
   );
 
   /// Returns the `TxPropose` bytes to send, only after intent and LOCKED_OUTGOING are durable.
@@ -2857,11 +3110,13 @@ class PayerTxEngineImpl extends RustOpaque implements PayerTxEngine {
     required List<int> spendBody,
     required BigInt counter,
     required List<int> recipientId,
+    required List<int> stub,
   }) => RustLib.instance.api.crateApiPayerTxEnginePropose(
     that: this,
     spendBody: spendBody,
     counter: counter,
     recipientId: recipientId,
+    stub: stub,
   );
 
   /// Stored `TxPropose` bytes of every still-locked cheque, for byte-identical redelivery.
@@ -2902,11 +3157,31 @@ class ReceiverTxEngineImpl extends RustOpaque implements ReceiverTxEngine {
     signature: signature,
   );
 
+  /// Verifies `snapshot` with the SNAPSHOT key and anchors the protocol clock on its
+  /// `issued_at_unix` (monotonic reading from the native plugin). Returns the held snapshot's
+  /// `issued_at_unix` (the newest seen).
+  Future<BigInt> installSnapshot({
+    required List<int> snapshot,
+    required BigInt monotonicNanos,
+    BigInt? bootCount,
+  }) => RustLib.instance.api.crateApiReceiverTxEngineInstallSnapshot(
+    that: this,
+    snapshot: snapshot,
+    monotonicNanos: monotonicNanos,
+    bootCount: bootCount,
+  );
+
   /// Returns the `AckReceipt` bytes; the same propose twice returns the same ack.
-  Future<Uint8List> onPropose({required List<int> propose}) => RustLib
-      .instance
-      .api
-      .crateApiReceiverTxEngineOnPropose(that: this, propose: propose);
+  Future<Uint8List> onPropose({
+    required List<int> propose,
+    required BigInt monotonicNanos,
+    BigInt? bootCount,
+  }) => RustLib.instance.api.crateApiReceiverTxEngineOnPropose(
+    that: this,
+    propose: propose,
+    monotonicNanos: monotonicNanos,
+    bootCount: bootCount,
+  );
 
   Future<PreparedAck> prepareAck({required List<int> txId}) => RustLib
       .instance
@@ -2914,8 +3189,14 @@ class ReceiverTxEngineImpl extends RustOpaque implements ReceiverTxEngine {
       .crateApiReceiverTxEnginePrepareAck(that: this, txId: txId);
 
   /// Verifies and durably stores the propose (state RECEIVED); returns its tx_id.
-  Future<Uint8List> storePropose({required List<int> propose}) => RustLib
-      .instance
-      .api
-      .crateApiReceiverTxEngineStorePropose(that: this, propose: propose);
+  Future<Uint8List> storePropose({
+    required List<int> propose,
+    required BigInt monotonicNanos,
+    BigInt? bootCount,
+  }) => RustLib.instance.api.crateApiReceiverTxEngineStorePropose(
+    that: this,
+    propose: propose,
+    monotonicNanos: monotonicNanos,
+    bootCount: bootCount,
+  );
 }

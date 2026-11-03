@@ -14,6 +14,9 @@ class PreparedPropose {
 
   /// Serialized `ChequeSpendBody` carrying the derived tx_id; handed back to `finish_propose`.
   final Uint8List body;
+
+  /// Serialized server `ChequeStub` sent alongside the spend.
+  final Uint8List stub;
   final BigInt counter;
 
   /// Stored `TxPropose` when this counter and content were already proposed: skip signing.
@@ -22,6 +25,7 @@ class PreparedPropose {
   const PreparedPropose({
     required this.message,
     required this.body,
+    required this.stub,
     required this.counter,
     this.existingPropose,
   });
@@ -30,6 +34,7 @@ class PreparedPropose {
   int get hashCode =>
       message.hashCode ^
       body.hashCode ^
+      stub.hashCode ^
       counter.hashCode ^
       existingPropose.hashCode;
 
@@ -40,6 +45,7 @@ class PreparedPropose {
           runtimeType == other.runtimeType &&
           message == other.message &&
           body == other.body &&
+          stub == other.stub &&
           counter == other.counter &&
           existingPropose == other.existingPropose;
 }

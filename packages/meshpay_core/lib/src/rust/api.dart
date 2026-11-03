@@ -10,7 +10,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'prepared_ack.dart';
 import 'prepared_propose.dart';
 
-// These functions are ignored because they are not marked as `pub`: `append_path_suffix`, `create_selfcheck_database_path`, `noise_error`, `noise_xk_params`, `read_selfcheck_value`, `remove_selfcheck_database`, `run_noise_xk_selfcheck`, `run_p256_selfcheck`, `run_sqlcipher_selfcheck`, `step_handshake`, `transport_step`
+// These functions are ignored because they are not marked as `pub`: `anchor`, `append_path_suffix`, `context`, `create_selfcheck_database_path`, `noise_error`, `noise_xk_params`, `outcome`, `read_selfcheck_value`, `remove_selfcheck_database`, `run_noise_xk_selfcheck`, `run_p256_selfcheck`, `run_sqlcipher_selfcheck`, `step_handshake`, `transport_step`, `with_engine`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `NoiseStage`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`
 
@@ -49,6 +49,12 @@ abstract class DtnBuffer implements RustOpaqueInterface {
   /// Envelopes for the first 20 requested ids.
   Future<List<Uint8List>> envelopesFor({required List<Uint8List> ids});
 
+  /// Stores an envelope created on this device (not from a peer, so no pair cap).
+  Future<bool> ingestLocal({
+    required List<int> envelope,
+    required BigInt nowUnix,
+  });
+
   /// Stores a `RevocationSnapshot` only if signed by the SNAPSHOT key and newer; returns its version.
   Future<BigInt> ingestSnapshot({required List<int> snapshot});
 
@@ -70,7 +76,9 @@ abstract class DtnBuffer implements RustOpaqueInterface {
   );
 
   /// One session per connected peer; all inbound envelopes go through it (20 per connection).
-  DtnSession openSession();
+  /// `origin_pair` is `NoiseSession::peer_pair_key` of the authenticated link: envelopes count
+  /// toward that pair's daily cap.
+  DtnSession openSession({required List<int> originPair});
 
   Future<Uint8List?> snapshotBytes();
 
@@ -112,6 +120,10 @@ abstract class NoiseSession implements RustOpaqueInterface {
     localPrivateKey: localPrivateKey,
     prologue: prologue,
   );
+
+  /// Initiator static key || responder static key of the finished handshake: the same bytes on
+  /// both ends, authenticated by Noise. Key for `DtnBuffer::open_session`.
+  Uint8List peerPairKey();
 
   Future<Uint8List> readMessage({required List<int> message});
 
@@ -167,6 +179,7 @@ abstract class PayerTxEngine implements RustOpaqueInterface {
     required List<int> spendBody,
     required BigInt counter,
     required List<int> recipientId,
+    required List<int> stub,
   });
 
   /// Returns the `TxPropose` bytes to send, only after intent and LOCKED_OUTGOING are durable.
@@ -174,6 +187,7 @@ abstract class PayerTxEngine implements RustOpaqueInterface {
     required List<int> spendBody,
     required BigInt counter,
     required List<int> recipientId,
+    required List<int> stub,
   });
 
   /// Stored `TxPropose` bytes of every still-locked cheque, for byte-identical redelivery.
@@ -188,21 +202,39 @@ abstract class ReceiverTxEngine implements RustOpaqueInterface {
     required List<int> signature,
   });
 
-  /// Returns the `AckReceipt` bytes; the same propose twice returns the same ack.
-  Future<Uint8List> onPropose({required List<int> propose});
+  /// Verifies `snapshot` with the SNAPSHOT key and anchors the protocol clock on its
+  /// `issued_at_unix` (monotonic reading from the native plugin). Returns the held snapshot's
+  /// `issued_at_unix` (the newest seen).
+  Future<BigInt> installSnapshot({
+    required List<int> snapshot,
+    required BigInt monotonicNanos,
+    BigInt? bootCount,
+  });
 
+  /// Returns the `AckReceipt` bytes; the same propose twice returns the same ack.
+  Future<Uint8List> onPropose({
+    required List<int> propose,
+    required BigInt monotonicNanos,
+    BigInt? bootCount,
+  });
+
+  /// `snapshot_public_key` is the compressed P-256 SNAPSHOT role key; `expiry_secs` is `E`.
   static Future<ReceiverTxEngine> open({
     required String dbPath,
     required List<int> dbKey,
     required List<int> signingSeed,
     required List<int> payerPublicKey,
     required List<int> ownAccountId,
+    required List<int> snapshotPublicKey,
+    required BigInt expirySecs,
   }) => RustLib.instance.api.crateApiReceiverTxEngineOpen(
     dbPath: dbPath,
     dbKey: dbKey,
     signingSeed: signingSeed,
     payerPublicKey: payerPublicKey,
     ownAccountId: ownAccountId,
+    snapshotPublicKey: snapshotPublicKey,
+    expirySecs: expirySecs,
   );
 
   /// External-signer mode (Android Keystore): no seed. Flow: `store_propose`, `prepare_ack`,
@@ -213,18 +245,26 @@ abstract class ReceiverTxEngine implements RustOpaqueInterface {
     required List<int> ownPublicKey,
     required List<int> payerPublicKey,
     required List<int> ownAccountId,
+    required List<int> snapshotPublicKey,
+    required BigInt expirySecs,
   }) => RustLib.instance.api.crateApiReceiverTxEngineOpenExternal(
     dbPath: dbPath,
     dbKey: dbKey,
     ownPublicKey: ownPublicKey,
     payerPublicKey: payerPublicKey,
     ownAccountId: ownAccountId,
+    snapshotPublicKey: snapshotPublicKey,
+    expirySecs: expirySecs,
   );
 
   Future<PreparedAck> prepareAck({required List<int> txId});
 
   /// Verifies and durably stores the propose (state RECEIVED); returns its tx_id.
-  Future<Uint8List> storePropose({required List<int> propose});
+  Future<Uint8List> storePropose({
+    required List<int> propose,
+    required BigInt monotonicNanos,
+    BigInt? bootCount,
+  });
 }
 
 class CoreSelfcheck {
