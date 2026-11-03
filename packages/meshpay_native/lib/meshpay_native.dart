@@ -1,10 +1,15 @@
 import 'package:flutter/services.dart';
 
+import 'attested_payment_key.dart';
 import 'bluetooth_status.dart';
 import 'clock_sample.dart';
+import 'device_capabilities.dart';
 import 'native_event.dart';
 import 'native_event_decoder.dart';
 import 'native_payload.dart';
+import 'payment_key_exception.dart';
+import 'payment_key_info.dart';
+import 'single_use_key_batch.dart';
 
 class MeshpayNative {
   MeshpayNative({MethodChannel? methodChannel, EventChannel? eventChannel})
@@ -112,5 +117,86 @@ class MeshpayNative {
       <String, Object>{'sizeBytes': sizeBytes, 'iterations': iterations},
     );
     return NativePayload.readIntList(value, 'loopback timings');
+  }
+
+  /// Throws [PaymentKeyException] `strongbox_unavailable` when [requireStrongBox]
+  /// is set and the device has none; never falls back silently.
+  Future<AttestedPaymentKey> generateAttestedPaymentKey({
+    required String alias,
+    required Uint8List challenge,
+    required bool requireStrongBox,
+    bool singleUse = false,
+  }) async {
+    final Object? value = await _invokeKey<Object?>(
+      'generateAttestedPaymentKey',
+      <String, Object>{
+        'alias': alias,
+        'challenge': challenge,
+        'requireStrongBox': requireStrongBox,
+        'singleUse': singleUse,
+      },
+    );
+    return AttestedPaymentKey.fromPlatform(value);
+  }
+
+  /// SHA256withECDSA, DER-encoded signature.
+  Future<Uint8List> signWithPaymentKey({
+    required String alias,
+    required Uint8List data,
+  }) async {
+    final Object? value = await _invokeKey<Object?>(
+      'signWithPaymentKey',
+      <String, Object>{'alias': alias, 'data': data},
+    );
+    return NativePayload.readBytes(value, 'signature');
+  }
+
+  Future<void> deletePaymentKey({required String alias}) async {
+    await _invokeKey<void>('deletePaymentKey', <String, Object>{
+      'alias': alias,
+    });
+  }
+
+  Future<PaymentKeyInfo> getPaymentKeyInfo({required String alias}) async {
+    final Object? value = await _invokeKey<Object?>(
+      'paymentKeyInfo',
+      <String, Object>{'alias': alias},
+    );
+    return PaymentKeyInfo.fromPlatform(value);
+  }
+
+  Future<DeviceCapabilities> getDeviceCapabilities() async {
+    final Object? value = await _invokeKey<Object?>('deviceCapabilities');
+    return DeviceCapabilities.fromPlatform(value);
+  }
+
+  /// Generates [count] keys "$aliasPrefix0".."$aliasPrefix{count-1}" and times
+  /// each one. Pass [challenge] to include attestation in the timing.
+  Future<SingleUseKeyBatch> generateSingleUseKeys({
+    required String aliasPrefix,
+    required int count,
+    required bool requireStrongBox,
+    Uint8List? challenge,
+    bool applyMaxUsageCount = true,
+  }) async {
+    final Object? value = await _invokeKey<Object?>(
+      'generateSingleUseKeys',
+      <String, Object?>{
+        'aliasPrefix': aliasPrefix,
+        'count': count,
+        'requireStrongBox': requireStrongBox,
+        'challenge': challenge,
+        'applyMaxUsageCount': applyMaxUsageCount,
+      },
+    );
+    return SingleUseKeyBatch.fromPlatform(value);
+  }
+
+  Future<T?> _invokeKey<T>(String method, [Object? arguments]) async {
+    try {
+      return await _methodChannel.invokeMethod<T>(method, arguments);
+    } on PlatformException catch (error) {
+      throw PaymentKeyException.fromPlatform(error);
+    }
   }
 }
