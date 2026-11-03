@@ -171,7 +171,7 @@ class PayerTxLabFlow {
         );
       case LabFrameType.tx:
         return TxLabMessageHelper.decode(frame.payload);
-      case LabFrameType.echo:
+      case LabFrameType.echo || LabFrameType.dtn:
         throw const TxLabException(TxErrorCode.invalidMessage);
     }
   }

@@ -10,7 +10,9 @@ enum TxErrorCode {
   conflict,
   tooLarge,
   notCommittable,
-  internal;
+  internal,
+  dtnSummaryRepeated,
+  dtnRoundLimit;
 
   int get wire => index + 1;
 
