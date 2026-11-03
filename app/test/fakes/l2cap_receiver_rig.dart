@@ -3,6 +3,7 @@ import 'package:meshpay_native/l2cap_closed_event.dart';
 import 'package:meshpay_native/l2cap_data_event.dart';
 import 'package:meshpay_native/l2cap_opened_event.dart';
 
+import 'fake_dtn_buffer_service.dart';
 import 'fake_native_lab_service.dart';
 import 'fake_noise_service.dart';
 import 'fake_permission_service.dart';
@@ -17,6 +18,7 @@ class L2capReceiverRig {
       FakePermissionService(),
       noise,
       tx,
+      dtn,
     );
   }
 
@@ -25,6 +27,7 @@ class L2capReceiverRig {
   final FakeNativeLabService native = FakeNativeLabService();
   final FakeNoiseService noise = FakeNoiseService();
   final FakeReceiverTxEngineService tx = FakeReceiverTxEngineService();
+  final FakeDtnBufferService dtn = FakeDtnBufferService();
   late final L2capReceiverLabViewModel viewModel;
 
   Future<void> startAndAccept() async {
