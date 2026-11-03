@@ -199,4 +199,17 @@ async fn random_operations_keep_the_ledger_solvent() {
       );
     }
   }
+  // PV-LED-01 end state: supply cap holds, audit chain recomputes, nothing negative.
+  let (supply_ok, chain_ok, negative): (bool, bool, i64) = sqlx::query_as(
+    "SELECT (SELECT circulating <= granted AND granted <= cap FROM supply),
+            audit_chain_valid(),
+            (SELECT count(*) FROM balances WHERE available < 0 OR reserved < 0)",
+  )
+  .fetch_one(&app.pool)
+  .await
+  .unwrap();
+  assert!(
+    supply_ok && chain_ok && negative == 0,
+    "seed={seed}: supply_ok={supply_ok} audit_chain_valid={chain_ok} negative={negative}"
+  );
 }
