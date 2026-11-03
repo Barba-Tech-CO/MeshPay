@@ -38,3 +38,32 @@ pub fn verify(
     .verify(message, &signature)
     .map_err(|_| "signature verification failed".to_owned())
 }
+
+/// Verifies `signature` (raw 64 bytes or ASN.1 DER, which the Android Keystore returns) and
+/// returns its raw low-S form. Raw is tried first, then DER; an input that parses as raw but does
+/// not verify (a 64-byte DER) is still retried as DER.
+pub fn verify_normalized(
+  verifying_key: &VerifyingKey,
+  message: &[u8],
+  signature: &[u8],
+) -> Result<Vec<u8>, String> {
+  let mut parsed_any = false;
+  for candidate in [
+    Signature::from_slice(signature),
+    Signature::from_der(signature),
+  ]
+  .into_iter()
+  .flatten()
+  {
+    parsed_any = true;
+    let low_s = candidate.normalize_s();
+    if verifying_key.verify(message, &low_s).is_ok() {
+      return Ok(low_s.to_bytes().to_vec());
+    }
+  }
+  Err(if parsed_any {
+    "signature verification failed".to_owned()
+  } else {
+    "signature: malformed".to_owned()
+  })
+}
