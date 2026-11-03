@@ -1,12 +1,17 @@
 package company.barbatech.meshpay_native
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import java.io.IOException
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 
 class MeshpayNativePlugin : FlutterPlugin, MethodCallHandler {
   private lateinit var methodChannel: MethodChannel
@@ -16,6 +21,10 @@ class MeshpayNativePlugin : FlutterPlugin, MethodCallHandler {
   private lateinit var bluetoothController: BluetoothLeController
   private lateinit var l2capManager: L2capManager
   private lateinit var loopbackEcho: LoopbackEcho
+  private lateinit var paymentKeys: PaymentKeyManager
+  private var keyExecutor: ExecutorService? = null
+  @Volatile private var attached = false
+  private val mainHandler = Handler(Looper.getMainLooper())
 
   override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
     val context: Context = binding.applicationContext
@@ -32,6 +41,9 @@ class MeshpayNativePlugin : FlutterPlugin, MethodCallHandler {
     bluetoothController = BluetoothLeController(context, eventDispatcher)
     l2capManager = L2capManager(context, eventDispatcher)
     loopbackEcho = LoopbackEcho(methodChannel)
+    paymentKeys = PaymentKeyManager(context)
+    keyExecutor = Executors.newSingleThreadExecutor()
+    attached = true
     methodChannel.setMethodCallHandler(this)
     eventChannel.setStreamHandler(eventDispatcher)
   }
@@ -70,6 +82,34 @@ class MeshpayNativePlugin : FlutterPlugin, MethodCallHandler {
           call.requiredInt("iterations"),
           result,
         )
+        "generateAttestedPaymentKey" -> runKeyCall(result) {
+          paymentKeys.generateAttestedKey(
+            call.requiredString("alias"),
+            call.requiredBytes("challenge"),
+            call.requiredBool("requireStrongBox"),
+            call.requiredBool("singleUse"),
+          )
+        }
+        "signWithPaymentKey" -> runKeyCall(result) {
+          paymentKeys.sign(call.requiredString("alias"), call.requiredBytes("data"))
+        }
+        "deletePaymentKey" -> runKeyCall(result) {
+          paymentKeys.deleteKey(call.requiredString("alias"))
+          null
+        }
+        "paymentKeyInfo" -> runKeyCall(result) {
+          paymentKeys.keyInfo(call.requiredString("alias"))
+        }
+        "deviceCapabilities" -> runKeyCall(result) { paymentKeys.deviceCapabilities() }
+        "generateSingleUseKeys" -> runKeyCall(result) {
+          paymentKeys.generateSingleUseKeys(
+            call.requiredString("aliasPrefix"),
+            call.requiredInt("count"),
+            call.requiredBool("requireStrongBox"),
+            call.optionalBytes("challenge"),
+            call.requiredBool("applyMaxUsageCount"),
+          )
+        }
         else -> result.notImplemented()
       }
     } catch (error: NativePluginException) {
@@ -92,6 +132,37 @@ class MeshpayNativePlugin : FlutterPlugin, MethodCallHandler {
     eventChannel.setStreamHandler(null)
     bluetoothController.dispose()
     l2capManager.dispose()
+    attached = false
+    keyExecutor?.shutdownNow()
+    keyExecutor = null
+  }
+
+  // Keystore work (key generation takes hundreds of ms) stays off the main thread.
+  private fun runKeyCall(result: MethodChannel.Result, block: () -> Any?) {
+    val executor = keyExecutor
+    if (executor == null) {
+      result.error("plugin_detached", "The plugin is not attached.", null)
+      return
+    }
+    try {
+      executor.execute {
+        val outcome = runCatching(block)
+        mainHandler.post {
+          if (!attached) {
+            return@post
+          }
+          outcome.fold(
+            onSuccess = { result.success(it) },
+            onFailure = {
+              val error = KeystoreErrors.map(it)
+              result.error(error.code, error.message, null)
+            },
+          )
+        }
+      }
+    } catch (error: RejectedExecutionException) {
+      result.error("plugin_detached", "The plugin is not attached.", null)
+    }
   }
 
   private fun startAdvertising(
@@ -171,6 +242,17 @@ class MeshpayNativePlugin : FlutterPlugin, MethodCallHandler {
       )
     }
   }
+
+  private fun MethodCall.requiredBool(name: String): Boolean =
+    argumentsMap()[name] as? Boolean
+      ?: throw NativePluginException("invalid_argument", "$name must be a boolean.")
+
+  private fun MethodCall.optionalBytes(name: String): ByteArray? =
+    when (val value = argumentsMap()[name]) {
+      null -> null
+      is ByteArray -> value
+      else -> throw NativePluginException("invalid_data", "$name must be bytes or null.")
+    }
 
   private fun MethodCall.requiredBytes(name: String): ByteArray =
     argumentsMap()[name] as? ByteArray

@@ -68,4 +68,31 @@ class NativePayload {
     }
     return List<int>.unmodifiable(result);
   }
+
+  static Uint8List readBytesField(Map<Object?, Object?> payload, String key) {
+    return readBytes(payload[key], key);
+  }
+
+  static List<Uint8List> readBytesList(Object? value, String name) {
+    if (value is! List<Object?>) {
+      throw NativeProtocolException('$name must be a list of byte arrays.');
+    }
+    return List<Uint8List>.unmodifiable(
+      value.map((Object? item) => readBytes(item, name)),
+    );
+  }
+
+  static List<String> readStringList(Object? value, String name) {
+    if (value is! List<Object?>) {
+      throw NativeProtocolException('$name must be a list of strings.');
+    }
+    final result = <String>[];
+    for (final item in value) {
+      if (item is! String) {
+        throw NativeProtocolException('$name must contain only strings.');
+      }
+      result.add(item);
+    }
+    return List<String>.unmodifiable(result);
+  }
 }
