@@ -7,7 +7,7 @@ import 'package:meshpay_native/key_security_level.dart';
 class FakePaymentKeySigner implements PaymentKeySigner {
   final List<String> calls = <String>[];
   final List<Uint8List> signedMessages = <Uint8List>[];
-  final Uint8List signature = Uint8List.fromList(List<int>.filled(70, 9));
+  Uint8List signature = Uint8List.fromList(List<int>.filled(70, 9));
   Object? signError;
 
   @override

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meshpay/core/ble/l2cap_frame_codec.dart';
 import 'package:meshpay/core/noise/noise_l2cap_session.dart';
+import 'package:meshpay/core/server/messages/cheque_spend_body.dart';
 import 'package:meshpay/core/tx/lab_frame_helper.dart';
 import 'package:meshpay/core/tx/payer_tx_lab_flow.dart';
 import 'package:meshpay/core/tx/tx_error_code.dart';
@@ -163,13 +164,15 @@ void main() {
   test('resendPending stops at the first failure', () async {
     for (final counter in <int>[1, 2]) {
       await engine.propose(
-        spendBody: TxWireHelper.buildSpendBody(
+        spendBody: ChequeSpendBody(
           chequeId: Uint8List(16),
           payeeAccountId: Uint8List(33),
           amountUnits: 1,
+          txId: Uint8List(0),
           counter: counter,
+          prevSpendHash: Uint8List(0),
           signedAtUnix: 1,
-        ),
+        ).toBytes(),
         counter: counter,
         recipientId: Uint8List(1),
       );

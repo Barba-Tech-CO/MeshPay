@@ -1,17 +1,20 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:meshpay/core/server/messages/cheque_spend_body.dart';
 import 'package:meshpay/core/tx/tx_wire_helper.dart';
 
 void main() {
   test('builds a spend body with multi-byte varints and no tx_id', () {
-    final body = TxWireHelper.buildSpendBody(
+    final body = ChequeSpendBody(
       chequeId: Uint8List.fromList(<int>[1, 2]),
       payeeAccountId: Uint8List.fromList(<int>[3]),
       amountUnits: 300,
+      txId: Uint8List(0),
       counter: 1,
+      prevSpendHash: Uint8List(0),
       signedAtUnix: 0,
-    );
+    ).toBytes();
 
     expect(body, <int>[
       0x0a, 2, 1, 2, // cheque_id

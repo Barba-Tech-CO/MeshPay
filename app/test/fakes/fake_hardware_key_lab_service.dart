@@ -42,7 +42,10 @@ class FakeHardwareKeyLabService implements HardwareKeyLabService {
       throw error;
     }
     return AttestedPaymentKey(
-      publicKey: Uint8List.fromList(<int>[4, ...List<int>.filled(64, 171)]),
+      publicKey: Uint8List.fromList(<int>[
+        4,
+        ...List<int>.filled(64, alias.contains('payee') ? 173 : 171),
+      ]),
       certificateChain: <Uint8List>[Uint8List(3), Uint8List(3), Uint8List(3)],
       securityLevel: requireStrongBox
           ? KeySecurityLevel.strongBox

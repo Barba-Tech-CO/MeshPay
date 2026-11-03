@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:meshpay/core/server/messages/cheque_spend_body.dart';
 import 'package:meshpay/core/tx/tx_wire_helper.dart';
 
 // Same literals as core/tests/tx_wire_golden.rs (prost decodes/encodes them).
@@ -24,15 +25,17 @@ void main() {
   final txId = Uint8List.fromList(List<int>.generate(32, (i) => i));
 
   test('spend body encodes to the golden bytes prost decodes', () {
-    final body = TxWireHelper.buildSpendBody(
+    final body = ChequeSpendBody(
       chequeId: Uint8List.fromList(List<int>.generate(16, (i) => i + 1)),
       payeeAccountId: Uint8List.fromList(
         List<int>.generate(8, (i) => 0xa0 + i),
       ),
       amountUnits: 1234567,
+      txId: Uint8List(0),
       counter: 5,
+      prevSpendHash: Uint8List(0),
       signedAtUnix: 1700000000,
-    );
+    ).toBytes();
 
     expect(_hex(body), _spendBodyHex);
   });

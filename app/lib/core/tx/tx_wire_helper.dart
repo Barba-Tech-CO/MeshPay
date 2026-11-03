@@ -8,21 +8,6 @@ class TxWireHelper {
   static const int _lengthDelimited = 2;
   static const int _maxVarintBytes = 10;
 
-  /// Body without `tx_id`: the payer engine derives and appends it.
-  static Uint8List buildSpendBody({
-    required Uint8List chequeId,
-    required Uint8List payeeAccountId,
-    required int amountUnits,
-    required int counter,
-    required int signedAtUnix,
-  }) => Uint8List.fromList(<int>[
-    ...encodeBytesField(1, chequeId),
-    ...encodeBytesField(2, payeeAccountId),
-    ..._encodeVarintField(3, amountUnits),
-    ..._encodeVarintField(5, counter),
-    ..._encodeVarintField(7, signedAtUnix),
-  ]);
-
   static Uint8List encodeBytesField(int tag, List<int> value) =>
       Uint8List.fromList(<int>[
         tag << 3 | _lengthDelimited,
@@ -39,9 +24,6 @@ class TxWireHelper {
 
   /// `AckReceipt.tx_id(1)`.
   static Uint8List? txIdFromAck(Uint8List ack) => _field(ack, 1);
-
-  static List<int> _encodeVarintField(int tag, int value) =>
-      value == 0 ? const <int>[] : <int>[tag << 3, ..._encodeVarint(value)];
 
   static List<int> _encodeVarint(int value) {
     final bytes = <int>[];
