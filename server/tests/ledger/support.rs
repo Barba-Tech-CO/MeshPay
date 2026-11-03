@@ -6,6 +6,7 @@ use meshpay_server::config::app_config::AppConfig;
 use meshpay_server::crypto::p256_keys::{
   compressed_public_key, key_id, sign, signing_key_from_seed,
 };
+use meshpay_server::crypto::server_key_cert::issue_cert;
 use meshpay_server::crypto::signing_messages::{
   balance_message, issue_message, register_message, spend_signing_message,
 };
@@ -24,6 +25,7 @@ use meshpay_server::wire::issue_request_body::IssueRequestBody;
 use meshpay_server::wire::issue_response::IssueResponse;
 use meshpay_server::wire::register_request::RegisterRequest;
 use meshpay_server::wire::register_response::RegisterResponse;
+use meshpay_server::wire::server_key_role::ServerKeyRole;
 use p256::ecdsa::SigningKey;
 use prost::Message;
 use sqlx::PgPool;
@@ -35,7 +37,18 @@ pub struct TestApp {
   /// Owner role, only for checking that triggers also stop the owner.
   pub owner_pool: PgPool,
   pub state: AppState,
+  /// TEST ONLY offline root of this app; signs `ServerKeyCert`s and kill-switch snapshots.
+  pub root_key: SigningKey,
+  /// (admin URL of the shared database, name) of a database created by `setup_isolated`.
+  isolated_db: Option<(String, String)>,
   router: Router,
+}
+
+pub fn unix_now() -> u64 {
+  std::time::SystemTime::now()
+    .duration_since(std::time::UNIX_EPOCH)
+    .unwrap()
+    .as_secs()
 }
 
 pub fn random_bytes(len: usize) -> Vec<u8> {
@@ -50,6 +63,30 @@ pub async fn setup(lab_mode: bool) -> Option<TestApp> {
 
 /// `None` (test skipped) when the database env is unset, so CI without a database does not fail.
 pub async fn setup_with(tweak: impl FnOnce(&mut AppConfig)) -> Option<TestApp> {
+  setup_inner(tweak, None, None).await
+}
+
+/// Shared-database app whose own ISSUER cert is valid only in `not_before..=not_after`.
+pub async fn setup_with_cert(not_before: u64, not_after: u64) -> Option<TestApp> {
+  setup_inner(|_| {}, None, Some((not_before, not_after))).await
+}
+
+/// App on a fresh database of its own (supply cap and grant chosen here), for tests that change
+/// global state (kill switch) or tamper with append-only rows. Call `drop_isolated` at the end.
+pub async fn setup_isolated(supply_cap: u64, initial_grant: u64) -> Option<TestApp> {
+  setup_inner(|_| {}, Some((supply_cap, initial_grant)), None).await
+}
+
+/// Same URL on another database (the URLs end with `/<database>`).
+fn on_database(url: &str, database: &str) -> String {
+  format!("{}/{database}", url.rsplit_once('/').unwrap().0)
+}
+
+async fn setup_inner(
+  tweak: impl FnOnce(&mut AppConfig),
+  isolated: Option<(u64, u64)>,
+  cert_window: Option<(u64, u64)>,
+) -> Option<TestApp> {
   let _ = tracing_subscriber::fmt().with_test_writer().try_init();
   let env = |name: &str| std::env::var(name).ok();
   let (Some(database_url), Some(owner_url), Some(runtime_password)) = (
@@ -63,11 +100,38 @@ pub async fn setup_with(tweak: impl FnOnce(&mut AppConfig)) -> Option<TestApp> {
     );
     return None;
   };
+  // TEST ONLY root and server keys, fresh per app.
+  let root_key = signing_key_from_seed(&random_bytes(32)).unwrap();
+  let server_seed = random_bytes(32);
+  let server_key = signing_key_from_seed(&server_seed).unwrap();
+  // From an hour back, so tests can backdate chequebooks within the cert.
+  let now = unix_now();
+  let (not_before, not_after) = cert_window.unwrap_or((now - 3_600, now + 86_400));
+  let cert = issue_cert(
+    &root_key,
+    &server_key,
+    ServerKeyRole::Issuer,
+    not_before,
+    not_after,
+  );
+  let (database_url, owner_url, isolated_db) = match isolated {
+    None => (database_url, owner_url, None),
+    Some(_) => {
+      let name = format!("meshpay_test_{}", hex::encode(random_bytes(8)));
+      (
+        on_database(&database_url, &name),
+        on_database(&owner_url, &name),
+        Some((owner_url, name)),
+      )
+    }
+  };
   let mut config = AppConfig {
     database_url: database_url.clone(),
     listen_addr: "127.0.0.1:0".to_owned(),
     lab_mode: true,
-    server_signing_key_hex: hex::encode(random_bytes(32)),
+    server_signing_key_hex: hex::encode(&server_seed),
+    server_root_public_key_hex: hex::encode(compressed_public_key(&root_key)),
+    server_key_cert_hex: hex::encode(cert.encode_to_vec()),
     cap_cheque_units: 1_000,
     cap_reserve_units: 5_000,
     cheque_max_count: 10,
@@ -77,22 +141,38 @@ pub async fn setup_with(tweak: impl FnOnce(&mut AppConfig)) -> Option<TestApp> {
     max_concurrent_requests: 64,
     register_limit_per_minute: 10_000,
     challenge_limit_per_minute: 10_000,
+    control_limit_per_minute: 10_000,
     attestation_roots_pem_file: "/dev/null".to_owned(),
     attestation_revocation_file: "/dev/null".to_owned(),
     attestation_challenge_ttl_seconds: 60,
     allow_tee_issuance: false,
   };
   tweak(&mut config);
-  pool::migrate(&owner_url, 1_000_000_000_000, 10_000, &runtime_password)
-    .await
-    .unwrap();
+  let shared_owner_url = isolated_db.as_ref().map_or(&owner_url, |(url, _)| url);
+  pool::migrate(
+    shared_owner_url,
+    1_000_000_000_000,
+    10_000,
+    &runtime_password,
+  )
+  .await
+  .unwrap();
+  if let (Some((admin_url, name)), Some((cap, grant))) = (&isolated_db, isolated) {
+    let admin = pool::connect(admin_url).await.unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(format!("CREATE DATABASE {name}")))
+      .execute(&admin)
+      .await
+      .unwrap();
+    admin.close().await;
+    pool::apply_schema(&owner_url, cap, grant).await.unwrap();
+  }
   let owner_pool = pool::connect(&owner_url).await.unwrap();
   let grant: i64 = sqlx::query_scalar("SELECT initial_grant FROM supply")
     .fetch_one(&owner_pool)
     .await
     .unwrap();
-  assert_eq!(
-    grant, 10_000,
+  assert!(
+    isolated.is_some() || grant == 10_000,
     "the tests expect INITIAL_GRANT_UNITS=10000 in .env"
   );
   let pool = pool::connect(&database_url).await.unwrap();
@@ -100,12 +180,30 @@ pub async fn setup_with(tweak: impl FnOnce(&mut AppConfig)) -> Option<TestApp> {
   Some(TestApp {
     pool,
     owner_pool,
+    root_key,
+    isolated_db,
     router: router(state.clone()),
     state,
   })
 }
 
 impl TestApp {
+  pub async fn drop_isolated(self) {
+    let Some((admin_url, name)) = self.isolated_db else {
+      return;
+    };
+    self.pool.close().await;
+    self.owner_pool.close().await;
+    self.state.pool.close().await;
+    let admin = pool::connect(&admin_url).await.unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+      "DROP DATABASE {name} WITH (FORCE)"
+    )))
+    .execute(&admin)
+    .await
+    .unwrap();
+  }
+
   pub async fn call(&self, method: &str, path: &str, body: Vec<u8>) -> (StatusCode, Vec<u8>) {
     let request = Request::builder()
       .method(method)
@@ -186,6 +284,10 @@ impl Client {
   /// Raw private scalar, only to check that proofs never carry it.
   pub fn secret_bytes(&self) -> Vec<u8> {
     self.key.to_bytes().to_vec()
+  }
+
+  pub fn public_key(&self) -> Vec<u8> {
+    compressed_public_key(&self.key)
   }
 
   pub fn verifying_key(&self) -> p256::ecdsa::VerifyingKey {

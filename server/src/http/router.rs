@@ -1,4 +1,4 @@
-use crate::http::{accounts, challenge, chequebooks, deposits, health, server_key};
+use crate::http::{accounts, challenge, chequebooks, deposits, health, kill_switch, server_key};
 use crate::state::AppState;
 use axum::Router;
 use axum::error_handling::HandleErrorLayer;
@@ -22,6 +22,7 @@ pub fn router(state: AppState) -> Router {
     )
     .route("/v1/chequebooks", post(chequebooks::issue))
     .route("/v1/deposits", post(deposits::deposit))
+    .route("/v1/control/snapshot", post(kill_switch::apply))
     .layer(DefaultBodyLimit::max(64 * 1024))
     .layer(
       ServiceBuilder::new()

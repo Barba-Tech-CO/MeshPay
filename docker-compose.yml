@@ -23,7 +23,8 @@ services:
       retries: 12
 
   migrate:
-    build: ./server
+    build:
+      context: ./server
     image: meshpay-server
     command: ["meshpay_server", "migrate"]
     restart: "no"
@@ -37,13 +38,15 @@ services:
       INITIAL_GRANT_UNITS: ${INITIAL_GRANT_UNITS}
 
   server:
-    build: ./server
+    build:
+      context: ./server
     image: meshpay-server
     depends_on:
       migrate:
         condition: service_completed_successfully
     secrets:
       - server_signing_key
+      - server_key_cert
       - attestation_roots
       - attestation_revoked
     environment:
@@ -51,6 +54,8 @@ services:
       LISTEN_ADDR: 0.0.0.0:${SERVER_PORT}
       LAB_MODE: ${LAB_MODE}
       SERVER_SIGNING_KEY_FILE: ${SERVER_SIGNING_KEY_FILE}
+      SERVER_KEY_CERT_FILE: ${SERVER_KEY_CERT_FILE}
+      SERVER_ROOT_PUBLIC_KEY_HEX: ${SERVER_ROOT_PUBLIC_KEY_HEX}
       CAP_CHEQUE_UNITS: ${CAP_CHEQUE_UNITS}
       CAP_RESERVE_UNITS: ${CAP_RESERVE_UNITS}
       CHEQUE_MAX_COUNT: ${CHEQUE_MAX_COUNT}
@@ -60,6 +65,7 @@ services:
       MAX_CONCURRENT_REQUESTS: ${MAX_CONCURRENT_REQUESTS}
       REGISTER_LIMIT_PER_MINUTE: ${REGISTER_LIMIT_PER_MINUTE}
       CHALLENGE_LIMIT_PER_MINUTE: ${CHALLENGE_LIMIT_PER_MINUTE}
+      CONTROL_LIMIT_PER_MINUTE: ${CONTROL_LIMIT_PER_MINUTE}
       ATTESTATION_ROOTS_PEM_FILE: ${ATTESTATION_ROOTS_PEM_FILE}
       ATTESTATION_REVOCATION_FILE: ${ATTESTATION_REVOCATION_FILE}
       ATTESTATION_CHALLENGE_TTL_SECONDS: ${ATTESTATION_CHALLENGE_TTL_SECONDS}
@@ -75,6 +81,8 @@ services:
 secrets:
   server_signing_key:
     file: ./server/secrets/server_signing_key.hex
+  server_key_cert:
+    file: ./server/secrets/server_key_cert.hex
   attestation_roots:
     file: ./server/secrets/attestation_roots.pem
   attestation_revoked:

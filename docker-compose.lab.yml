@@ -1,0 +1,11 @@
+# Lab-only override: builds the server and migrate images with the `lab` feature (lab-key-cert).
+# Never part of a production build; .env sets COMPOSE_FILE to include it locally.
+services:
+  migrate:
+    build:
+      args:
+        CARGO_FEATURES: lab
+  server:
+    build:
+      args:
+        CARGO_FEATURES: lab

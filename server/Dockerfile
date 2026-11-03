@@ -3,7 +3,8 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY migrations migrations
 COPY src src
-RUN cargo build --release --locked
+ARG CARGO_FEATURES
+RUN cargo build --release --locked --features "$CARGO_FEATURES"
 
 FROM debian:12.15-slim
 RUN apt-get update \

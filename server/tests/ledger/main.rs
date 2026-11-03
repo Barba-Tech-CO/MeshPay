@@ -7,6 +7,7 @@ mod cases;
 mod deposit_race;
 mod equivocation_independent;
 mod independent_verifier;
+mod pv_sec_05;
 mod random_source;
 mod solvency_random_ops;
 mod support;

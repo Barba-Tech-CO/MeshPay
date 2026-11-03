@@ -5,6 +5,8 @@ pub mod deposit;
 pub mod equivocation;
 pub mod expiry;
 pub mod issuance;
+pub mod kill_switch;
 pub mod registration;
+pub mod server_keys;
 pub mod stored;
 pub mod units;

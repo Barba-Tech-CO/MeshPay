@@ -1,16 +1,18 @@
 use crate::attestation::account_level::AccountLevel;
-use crate::crypto::p256_keys::{sign, verify};
+use crate::crypto::p256_keys::{KEY_ID_LEN, sign, verify};
+use crate::crypto::server_key_cert::is_current;
 use crate::crypto::signing_messages::{issue_message, stub_seal_message};
 use crate::error::ApiError;
 use crate::ledger::stored::decode_stored;
 use crate::ledger::units::{to_i64, to_u64};
-use crate::ledger::{audit, balance, expiry};
+use crate::ledger::{audit, balance, expiry, server_keys};
 use crate::state::AppState;
 use crate::wire::cheque_stub::ChequeStub;
 use crate::wire::cheque_stub_body::ChequeStubBody;
 use crate::wire::issue_request::IssueRequest;
 use crate::wire::issue_request_body::IssueRequestBody;
 use crate::wire::issue_response::IssueResponse;
+use crate::wire::server_key_role::ServerKeyRole;
 use prost::Message;
 
 fn random_id() -> Result<Vec<u8>, ApiError> {
@@ -27,7 +29,7 @@ pub async fn issue(
 ) -> Result<IssueResponse, ApiError> {
   let body = IssueRequestBody::decode(request.body.as_slice())
     .map_err(|e| ApiError::BadRequest(format!("issue body: {e}")))?;
-  if body.account_id.len() != 16 || body.request_id.len() != 16 {
+  if body.account_id.len() != KEY_ID_LEN || body.request_id.len() != 16 {
     return Err(ApiError::BadRequest(
       "account_id and request_id are 16 bytes".to_owned(),
     ));
@@ -85,6 +87,21 @@ pub async fn issue(
       "account frozen by equivocation proof".to_owned(),
     ));
   }
+  // PV-SEC-05: no stub under an expired or revoked ISSUER key, none while issuance is frozen.
+  let cert = &state.key_cert_body;
+  if !is_current(cert, now_unix) || server_keys::is_revoked(&mut tx, &cert.key_id).await? {
+    return Err(ApiError::forbidden("server issuer key expired or revoked"));
+  }
+  if server_keys::issuance_frozen(&mut tx).await? {
+    return Err(ApiError::forbidden("issuance frozen by kill switch"));
+  }
+  server_keys::register_cert(
+    &mut tx,
+    &cert.key_id,
+    ServerKeyRole::Issuer,
+    &state.key_cert.encode_to_vec(),
+  )
+  .await?;
   let existing: Option<(Vec<u8>, i64)> = sqlx::query_as(
     "SELECT chequebook_id, reserve_units FROM chequebooks WHERE account_id = $1 AND request_id = $2",
   )
@@ -119,6 +136,12 @@ pub async fn issue(
 
   let chequebook_id = random_id()?;
   let expires_at_unix = now_unix + body.ttl_seconds;
+  // Every stub must stay within the lifetime of the cert that seals it.
+  if expires_at_unix > cert.not_after_unix {
+    return Err(ApiError::Unprocessable(
+      "ttl_seconds beyond the server key cert".to_owned(),
+    ));
+  }
   let expires_at = to_i64(expires_at_unix)?;
   let units = to_i64(body.max_amount_units)?;
   let reserve_signed = to_i64(reserve)?;
@@ -154,7 +177,7 @@ pub async fn issue(
       expires_at_unix,
       attestation_level: level.wire_level() as i32,
       single_use_key: false,
-      server_key_id: state.key_id(),
+      server_key_id: cert.key_id.clone(),
     };
     let body_bytes = stub_body.encode_to_vec();
     let seal = stub_seal_message(&body_bytes);
@@ -164,7 +187,8 @@ pub async fn issue(
     };
     sqlx::query(
       "INSERT INTO cheques (cheque_id, chequebook_id, account_id, epoch, signer_pubkey,
-         max_amount_units, expires_at_unix, stub) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+         max_amount_units, expires_at_unix, stub, server_key_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
     )
     .bind(&stub_body.cheque_id)
     .bind(&chequebook_id)
@@ -174,6 +198,7 @@ pub async fn issue(
     .bind(units)
     .bind(expires_at)
     .bind(stub.encode_to_vec())
+    .bind(&stub_body.server_key_id)
     .execute(&mut *tx)
     .await?;
     stubs.push(stub);
