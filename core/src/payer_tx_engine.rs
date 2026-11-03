@@ -1,8 +1,10 @@
+use crate::prepared_propose::PreparedPropose;
+use crate::spend_plan::SpendPlan;
 use crate::tx_database::{open_database, sql_error, to_sql_integer};
-use crate::tx_hashing::{
-  ack_signing_message, body_with_tx_id, derive_tx_id, spend_hash, spend_signing_message,
+use crate::tx_hashing::{ack_signing_message, spend_hash, spend_signing_message};
+use crate::tx_keys::{
+  sign, signing_key_from_seed, verify, verify_normalized, verifying_key_from_sec1,
 };
-use crate::tx_keys::{sign, signing_key_from_seed, verify, verifying_key_from_sec1};
 use crate::tx_wire::ack_receipt::AckReceipt;
 use crate::tx_wire::cheque_spend::ChequeSpend;
 use crate::tx_wire::cheque_spend_body::ChequeSpendBody;
@@ -33,10 +35,13 @@ CREATE TABLE IF NOT EXISTS outgoing_cheques (
 /// Largest `TxPropose` accepted or produced; a lab spend is far smaller.
 pub const MAX_PROPOSE_BYTES: usize = 4096;
 
-/// Payer side of the two-phase commit. LAB: software P-256 key.
+/// Payer side of the two-phase commit. Software mode (LAB) signs with a seed held here;
+/// external mode (Android Keystore, key not exportable) only knows the public key and takes
+/// the signature from the caller through `prepare_propose` / `finish_propose`.
 pub struct PayerEngine {
   connection: Mutex<Connection>,
-  signing_key: SigningKey,
+  signing_key: Option<SigningKey>,
+  own_key: VerifyingKey,
   payee_key: VerifyingKey,
 }
 
@@ -47,14 +52,32 @@ impl PayerEngine {
     signing_seed: &[u8],
     payee_public_key: &[u8],
   ) -> Result<Self, String> {
+    let signing_key = signing_key_from_seed(signing_seed)?;
     Ok(Self {
       connection: Mutex::new(open_database(db_path, db_key, schema())?),
-      signing_key: signing_key_from_seed(signing_seed)?,
+      own_key: *signing_key.verifying_key(),
+      signing_key: Some(signing_key),
       payee_key: verifying_key_from_sec1(payee_public_key)?,
     })
   }
 
-  /// Phase 1. `spend_body` is a `ChequeSpendBody` with empty (or correct) `tx_id`.
+  /// External mode: no seed, `own_public_key` is the P-256 key (SEC1, 65 or 33 bytes) whose
+  /// private half lives in the Keystore.
+  pub fn open_external(
+    db_path: &Path,
+    db_key: &[u8],
+    own_public_key: &[u8],
+    payee_public_key: &[u8],
+  ) -> Result<Self, String> {
+    Ok(Self {
+      connection: Mutex::new(open_database(db_path, db_key, schema())?),
+      signing_key: None,
+      own_key: verifying_key_from_sec1(own_public_key)?,
+      payee_key: verifying_key_from_sec1(payee_public_key)?,
+    })
+  }
+
+  /// Phase 1 (software mode). `spend_body` is a `ChequeSpendBody` with empty (or correct) `tx_id`.
   /// Intent and signed bytes are durable (WAL, synchronous=FULL) before this returns the
   /// `TxPropose` bytes. Same counter and content returns the stored bytes; other content errors.
   pub fn propose(
@@ -63,45 +86,102 @@ impl PayerEngine {
     counter: u64,
     recipient_id: &[u8],
   ) -> Result<Vec<u8>, String> {
-    let body = ChequeSpendBody::decode(spend_body).map_err(|e| format!("spend body: {e}"))?;
-    if body.counter != counter {
-      return Err("spend body counter differs from counter".to_owned());
+    let signing_key = self
+      .signing_key
+      .as_ref()
+      .ok_or("external signer: use prepare_propose and finish_propose")?;
+    let plan = SpendPlan::new(spend_body, counter, recipient_id)?;
+    let signature = sign(signing_key, &spend_signing_message(&plan.body_bytes));
+    self.persist(&plan, counter, signature)
+  }
+
+  /// External phase 1: validates, derives tx_id and returns the message to sign. Read-only.
+  pub fn prepare_propose(
+    &self,
+    spend_body: &[u8],
+    counter: u64,
+    recipient_id: &[u8],
+  ) -> Result<PreparedPropose, String> {
+    let plan = SpendPlan::new(spend_body, counter, recipient_id)?;
+    let existing_propose = Self::existing(
+      &*self.connection()?,
+      to_sql_integer(counter)?,
+      &plan.body.cheque_id,
+      &plan.tx_id,
+    )?;
+    Ok(PreparedPropose {
+      message: spend_signing_message(&plan.body_bytes),
+      body: plan.body_bytes,
+      counter,
+      existing_propose,
+    })
+  }
+
+  /// External phase 2: `signature` is raw 64 bytes or ASN.1 DER (Android `SHA256withECDSA`).
+  /// It is verified against the configured public key before anything is written; the row lands
+  /// in one IMMEDIATE transaction. Same counter and content returns the stored bytes.
+  pub fn finish_propose(
+    &self,
+    prepared: &PreparedPropose,
+    signature: &[u8],
+  ) -> Result<Vec<u8>, String> {
+    let body =
+      ChequeSpendBody::decode(prepared.body.as_slice()).map_err(|e| format!("spend body: {e}"))?;
+    let plan = SpendPlan::new(&prepared.body, prepared.counter, &body.payee_account_id)?;
+    let raw = verify_normalized(
+      &self.own_key,
+      &spend_signing_message(&plan.body_bytes),
+      signature,
+    )?;
+    self.persist(&plan, prepared.counter, raw)
+  }
+
+  /// Stored propose bytes for this exact content; error when the counter or cheque is taken by
+  /// different content.
+  fn existing(
+    connection: &Connection,
+    counter_sql: i64,
+    cheque_id: &[u8],
+    tx_id: &[u8],
+  ) -> Result<Option<Vec<u8>>, String> {
+    let existing: Option<(Vec<u8>, Vec<u8>)> = connection
+      .query_row(
+        "SELECT tx_id, propose_bytes FROM outgoing_cheques WHERE counter = ?1 OR cheque_id = ?2",
+        params![counter_sql, cheque_id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+      )
+      .optional()
+      .map_err(sql_error)?;
+    match existing {
+      None => Ok(None),
+      Some((stored_tx_id, stored_bytes)) if stored_tx_id == tx_id => Ok(Some(stored_bytes)),
+      Some(_) => Err("counter or cheque already used with different content".to_owned()),
     }
-    if body.payee_account_id != recipient_id {
-      return Err("spend body payee differs from recipient".to_owned());
-    }
-    let tx_id = derive_tx_id(counter, spend_body)?;
-    if !body.tx_id.is_empty() && body.tx_id != tx_id {
-      return Err("spend body tx_id does not match its content".to_owned());
-    }
-    let body_bytes = body_with_tx_id(spend_body, &tx_id)?;
+  }
+
+  fn persist(
+    &self,
+    plan: &SpendPlan,
+    counter: u64,
+    payer_signature: Vec<u8>,
+  ) -> Result<Vec<u8>, String> {
     let counter_sql = to_sql_integer(counter)?;
-    let amount_sql = to_sql_integer(body.amount_units)?;
-    let signed_at_sql = to_sql_integer(body.signed_at_unix)?;
+    let amount_sql = to_sql_integer(plan.body.amount_units)?;
+    let signed_at_sql = to_sql_integer(plan.body.signed_at_unix)?;
 
     let mut connection = self.connection()?;
     let transaction = connection
       .transaction_with_behavior(TransactionBehavior::Immediate)
       .map_err(sql_error)?;
-    let existing: Option<(Vec<u8>, Vec<u8>)> = transaction
-      .query_row(
-        "SELECT tx_id, propose_bytes FROM outgoing_cheques WHERE counter = ?1 OR cheque_id = ?2",
-        params![counter_sql, body.cheque_id],
-        |row| Ok((row.get(0)?, row.get(1)?)),
-      )
-      .optional()
-      .map_err(sql_error)?;
-    if let Some((stored_tx_id, stored_bytes)) = existing {
-      return if stored_tx_id == tx_id {
-        Ok(stored_bytes)
-      } else {
-        Err("counter or cheque already used with different content".to_owned())
-      };
+    if let Some(stored) =
+      Self::existing(&transaction, counter_sql, &plan.body.cheque_id, &plan.tx_id)?
+    {
+      return Ok(stored);
     }
 
     let spend = ChequeSpend {
-      payer_signature: sign(&self.signing_key, &spend_signing_message(&body_bytes)),
-      body: body_bytes.clone(),
+      payer_signature,
+      body: plan.body_bytes.clone(),
     };
     let propose_bytes = TxPropose { spend: Some(spend) }.encode_to_vec();
     if propose_bytes.len() > MAX_PROPOSE_BYTES {
@@ -113,13 +193,13 @@ impl PayerEngine {
            (tx_id, counter, cheque_id, payee_account_id, amount_units, signed_at_unix, spend_hash, propose_bytes, state)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'LOCKED_OUTGOING')",
         params![
-          tx_id,
+          plan.tx_id,
           counter_sql,
-          body.cheque_id,
-          body.payee_account_id,
+          plan.body.cheque_id,
+          plan.body.payee_account_id,
           amount_sql,
           signed_at_sql,
-          spend_hash(&body_bytes),
+          spend_hash(&plan.body_bytes),
           propose_bytes
         ],
       )

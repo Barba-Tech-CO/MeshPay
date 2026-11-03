@@ -7,6 +7,9 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+import 'prepared_ack.dart';
+import 'prepared_propose.dart';
+
 // These functions are ignored because they are not marked as `pub`: `append_path_suffix`, `create_selfcheck_database_path`, `noise_error`, `noise_xk_params`, `read_selfcheck_value`, `remove_selfcheck_database`, `run_noise_xk_selfcheck`, `run_p256_selfcheck`, `run_sqlcipher_selfcheck`, `step_handshake`, `transport_step`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `NoiseStage`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`
@@ -123,6 +126,13 @@ abstract class PayerTxEngine implements RustOpaqueInterface {
     required BigInt expirySecs,
   });
 
+  /// External phase 2: verifies `signature` (raw 64 or DER), writes LOCKED_OUTGOING durably,
+  /// returns the `TxPropose` bytes.
+  Future<Uint8List> finishPropose({
+    required PreparedPropose prepared,
+    required List<int> signature,
+  });
+
   Future<void> onAck({required List<int> ack});
 
   /// `db_key` is the raw 32-byte SQLCipher key; `payee_public_key` is a compressed P-256 key.
@@ -138,6 +148,27 @@ abstract class PayerTxEngine implements RustOpaqueInterface {
     payeePublicKey: payeePublicKey,
   );
 
+  /// External-signer mode (Android Keystore): no seed. `own_public_key` is the Keystore P-256
+  /// key (SEC1 uncompressed 65 bytes or compressed 33). Use `prepare_propose` + `finish_propose`.
+  static Future<PayerTxEngine> openExternal({
+    required String dbPath,
+    required List<int> dbKey,
+    required List<int> ownPublicKey,
+    required List<int> payeePublicKey,
+  }) => RustLib.instance.api.crateApiPayerTxEngineOpenExternal(
+    dbPath: dbPath,
+    dbKey: dbKey,
+    ownPublicKey: ownPublicKey,
+    payeePublicKey: payeePublicKey,
+  );
+
+  /// External phase 1: nothing is stored. Sign `message` in the Keystore, then `finish_propose`.
+  Future<PreparedPropose> preparePropose({
+    required List<int> spendBody,
+    required BigInt counter,
+    required List<int> recipientId,
+  });
+
   /// Returns the `TxPropose` bytes to send, only after intent and LOCKED_OUTGOING are durable.
   Future<Uint8List> propose({
     required List<int> spendBody,
@@ -151,6 +182,12 @@ abstract class PayerTxEngine implements RustOpaqueInterface {
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ReceiverTxEngine>>
 abstract class ReceiverTxEngine implements RustOpaqueInterface {
+  /// Verifies `signature` (raw 64 or DER), persists and returns the `AckReceipt` bytes.
+  Future<Uint8List> finishAck({
+    required List<int> txId,
+    required List<int> signature,
+  });
+
   /// Returns the `AckReceipt` bytes; the same propose twice returns the same ack.
   Future<Uint8List> onPropose({required List<int> propose});
 
@@ -167,6 +204,27 @@ abstract class ReceiverTxEngine implements RustOpaqueInterface {
     payerPublicKey: payerPublicKey,
     ownAccountId: ownAccountId,
   );
+
+  /// External-signer mode (Android Keystore): no seed. Flow: `store_propose`, `prepare_ack`,
+  /// sign `message` in the Keystore, `finish_ack`.
+  static Future<ReceiverTxEngine> openExternal({
+    required String dbPath,
+    required List<int> dbKey,
+    required List<int> ownPublicKey,
+    required List<int> payerPublicKey,
+    required List<int> ownAccountId,
+  }) => RustLib.instance.api.crateApiReceiverTxEngineOpenExternal(
+    dbPath: dbPath,
+    dbKey: dbKey,
+    ownPublicKey: ownPublicKey,
+    payerPublicKey: payerPublicKey,
+    ownAccountId: ownAccountId,
+  );
+
+  Future<PreparedAck> prepareAck({required List<int> txId});
+
+  /// Verifies and durably stores the propose (state RECEIVED); returns its tx_id.
+  Future<Uint8List> storePropose({required List<int> propose});
 }
 
 class CoreSelfcheck {

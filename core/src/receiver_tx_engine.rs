@@ -1,7 +1,10 @@
 use crate::payer_tx_engine::MAX_PROPOSE_BYTES;
+use crate::prepared_ack::PreparedAck;
 use crate::tx_database::{open_database, sql_error, to_sql_integer};
 use crate::tx_hashing::{ack_signing_message, derive_tx_id, spend_hash, spend_signing_message};
-use crate::tx_keys::{sign, signing_key_from_seed, verify, verifying_key_from_sec1};
+use crate::tx_keys::{
+  sign, signing_key_from_seed, verify, verify_normalized, verifying_key_from_sec1,
+};
 use crate::tx_wire::ack_receipt::AckReceipt;
 use crate::tx_wire::cheque_spend_body::ChequeSpendBody;
 use crate::tx_wire::tx_propose::TxPropose;
@@ -27,10 +30,12 @@ CREATE TABLE IF NOT EXISTS incoming_cheques (
 ) STRICT;"
 }
 
-/// Receiver side of the two-phase commit. LAB: software P-256 key signs the `AckReceipt`.
+/// Receiver side of the two-phase commit. Software mode (LAB) signs the `AckReceipt` with a
+/// seed held here; external mode (Keystore) only knows the public key.
 pub struct ReceiverEngine {
   connection: Mutex<Connection>,
-  signing_key: SigningKey,
+  signing_key: Option<SigningKey>,
+  own_key: VerifyingKey,
   payer_key: VerifyingKey,
   own_account_id: Vec<u8>,
 }
@@ -43,12 +48,51 @@ impl ReceiverEngine {
     payer_public_key: &[u8],
     own_account_id: &[u8],
   ) -> Result<Self, String> {
+    let signing_key = signing_key_from_seed(signing_seed)?;
+    let own_key = *signing_key.verifying_key();
+    Self::build(
+      db_path,
+      db_key,
+      Some(signing_key),
+      own_key,
+      payer_public_key,
+      own_account_id,
+    )
+  }
+
+  /// External mode: no seed; `own_public_key` is the Keystore P-256 key (SEC1, 65 or 33 bytes).
+  pub fn open_external(
+    db_path: &Path,
+    db_key: &[u8],
+    own_public_key: &[u8],
+    payer_public_key: &[u8],
+    own_account_id: &[u8],
+  ) -> Result<Self, String> {
+    Self::build(
+      db_path,
+      db_key,
+      None,
+      verifying_key_from_sec1(own_public_key)?,
+      payer_public_key,
+      own_account_id,
+    )
+  }
+
+  fn build(
+    db_path: &Path,
+    db_key: &[u8],
+    signing_key: Option<SigningKey>,
+    own_key: VerifyingKey,
+    payer_public_key: &[u8],
+    own_account_id: &[u8],
+  ) -> Result<Self, String> {
     if own_account_id.is_empty() {
       return Err("own account id must not be empty".to_owned());
     }
     Ok(Self {
       connection: Mutex::new(open_database(db_path, db_key, schema())?),
-      signing_key: signing_key_from_seed(signing_seed)?,
+      signing_key,
+      own_key,
       payer_key: verifying_key_from_sec1(payer_public_key)?,
       own_account_id: own_account_id.to_vec(),
     })
@@ -56,6 +100,9 @@ impl ReceiverEngine {
 
   /// Verifies, durably stores and acknowledges. Same propose twice returns the same ack.
   pub fn on_propose(&self, propose_bytes: &[u8]) -> Result<Vec<u8>, String> {
+    if self.signing_key.is_none() {
+      return Err("external signer: use store_propose, prepare_ack and finish_ack".to_owned());
+    }
     let tx_id = self.store_propose(propose_bytes)?;
     self.issue_ack(&tx_id)
   }
@@ -123,13 +170,29 @@ impl ReceiverEngine {
     Ok(tx_id)
   }
 
-  /// Step 2 of `on_propose`: RECEIVED becomes ACKED with the signed `AckReceipt` stored.
+  /// Step 2 of `on_propose` (software mode): RECEIVED becomes ACKED with the signed `AckReceipt`.
   pub fn issue_ack(&self, tx_id: &[u8]) -> Result<Vec<u8>, String> {
-    let mut connection = self.connection()?;
-    let transaction = connection
-      .transaction_with_behavior(TransactionBehavior::Immediate)
-      .map_err(sql_error)?;
-    let (hash, ack_bytes): (Vec<u8>, Option<Vec<u8>>) = transaction
+    self.commit_ack(tx_id, None)
+  }
+
+  /// External step 2a: message to sign for a stored propose. Read-only.
+  pub fn prepare_ack(&self, tx_id: &[u8]) -> Result<PreparedAck, String> {
+    let (hash, existing_ack) = Self::load_row(&*self.connection()?, tx_id)?;
+    Ok(PreparedAck {
+      tx_id: tx_id.to_vec(),
+      message: ack_signing_message(tx_id, &hash),
+      existing_ack,
+    })
+  }
+
+  /// External step 2b: `signature` (raw or DER) is verified against the own public key, then the
+  /// ack is persisted. An already stored ack is returned unchanged.
+  pub fn finish_ack(&self, tx_id: &[u8], signature: &[u8]) -> Result<Vec<u8>, String> {
+    self.commit_ack(tx_id, Some(signature))
+  }
+
+  fn load_row(connection: &Connection, tx_id: &[u8]) -> Result<(Vec<u8>, Option<Vec<u8>>), String> {
+    connection
       .query_row(
         "SELECT spend_hash, ack_bytes FROM incoming_cheques WHERE tx_id = ?1",
         params![tx_id],
@@ -137,12 +200,31 @@ impl ReceiverEngine {
       )
       .optional()
       .map_err(sql_error)?
-      .ok_or("unknown tx_id")?;
+      .ok_or_else(|| "unknown tx_id".to_owned())
+  }
+
+  fn commit_ack(&self, tx_id: &[u8], external: Option<&[u8]>) -> Result<Vec<u8>, String> {
+    let mut connection = self.connection()?;
+    let transaction = connection
+      .transaction_with_behavior(TransactionBehavior::Immediate)
+      .map_err(sql_error)?;
+    let (hash, ack_bytes) = Self::load_row(&transaction, tx_id)?;
     if let Some(stored) = ack_bytes {
       return Ok(stored);
     }
+    let message = ack_signing_message(tx_id, &hash);
+    let payee_signature = match external {
+      Some(signature) => verify_normalized(&self.own_key, &message, signature)?,
+      None => sign(
+        self
+          .signing_key
+          .as_ref()
+          .ok_or("external signer: use prepare_ack and finish_ack")?,
+        &message,
+      ),
+    };
     let ack = AckReceipt {
-      payee_signature: sign(&self.signing_key, &ack_signing_message(tx_id, &hash)),
+      payee_signature,
       tx_id: tx_id.to_vec(),
       spend_hash: hash,
     }

@@ -2,6 +2,8 @@ use crate::dtn_buffer::DtnEngine;
 use crate::dtn_ingest_outcome::IngestOutcome;
 use crate::dtn_peer_session::DtnPeerSession;
 use crate::payer_tx_engine::PayerEngine;
+use crate::prepared_ack::PreparedAck;
+use crate::prepared_propose::PreparedPropose;
 use crate::receiver_tx_engine::ReceiverEngine;
 use crate::tx_keys::{compressed_public_key, signing_key_from_seed};
 use crate::tx_wire::sync_envelope::SyncEnvelope;
@@ -429,6 +431,46 @@ impl PayerTxEngine {
     self.engine.propose(&spend_body, counter, &recipient_id)
   }
 
+  /// External-signer mode (Android Keystore): no seed. `own_public_key` is the Keystore P-256
+  /// key (SEC1 uncompressed 65 bytes or compressed 33). Use `prepare_propose` + `finish_propose`.
+  pub fn open_external(
+    db_path: String,
+    db_key: Vec<u8>,
+    own_public_key: Vec<u8>,
+    payee_public_key: Vec<u8>,
+  ) -> Result<PayerTxEngine, String> {
+    Ok(PayerTxEngine {
+      engine: PayerEngine::open_external(
+        Path::new(&db_path),
+        &db_key,
+        &own_public_key,
+        &payee_public_key,
+      )?,
+    })
+  }
+
+  /// External phase 1: nothing is stored. Sign `message` in the Keystore, then `finish_propose`.
+  pub fn prepare_propose(
+    &self,
+    spend_body: Vec<u8>,
+    counter: u64,
+    recipient_id: Vec<u8>,
+  ) -> Result<PreparedPropose, String> {
+    self
+      .engine
+      .prepare_propose(&spend_body, counter, &recipient_id)
+  }
+
+  /// External phase 2: verifies `signature` (raw 64 or DER), writes LOCKED_OUTGOING durably,
+  /// returns the `TxPropose` bytes.
+  pub fn finish_propose(
+    &self,
+    prepared: PreparedPropose,
+    signature: Vec<u8>,
+  ) -> Result<Vec<u8>, String> {
+    self.engine.finish_propose(&prepared, &signature)
+  }
+
   pub fn on_ack(&self, ack: Vec<u8>) -> Result<(), String> {
     self.engine.on_ack(&ack)
   }
@@ -469,9 +511,43 @@ impl ReceiverTxEngine {
     })
   }
 
+  /// External-signer mode (Android Keystore): no seed. Flow: `store_propose`, `prepare_ack`,
+  /// sign `message` in the Keystore, `finish_ack`.
+  pub fn open_external(
+    db_path: String,
+    db_key: Vec<u8>,
+    own_public_key: Vec<u8>,
+    payer_public_key: Vec<u8>,
+    own_account_id: Vec<u8>,
+  ) -> Result<ReceiverTxEngine, String> {
+    Ok(ReceiverTxEngine {
+      engine: ReceiverEngine::open_external(
+        Path::new(&db_path),
+        &db_key,
+        &own_public_key,
+        &payer_public_key,
+        &own_account_id,
+      )?,
+    })
+  }
+
   /// Returns the `AckReceipt` bytes; the same propose twice returns the same ack.
   pub fn on_propose(&self, propose: Vec<u8>) -> Result<Vec<u8>, String> {
     self.engine.on_propose(&propose)
+  }
+
+  /// Verifies and durably stores the propose (state RECEIVED); returns its tx_id.
+  pub fn store_propose(&self, propose: Vec<u8>) -> Result<Vec<u8>, String> {
+    self.engine.store_propose(&propose)
+  }
+
+  pub fn prepare_ack(&self, tx_id: Vec<u8>) -> Result<PreparedAck, String> {
+    self.engine.prepare_ack(&tx_id)
+  }
+
+  /// Verifies `signature` (raw 64 or DER), persists and returns the `AckReceipt` bytes.
+  pub fn finish_ack(&self, tx_id: Vec<u8>, signature: Vec<u8>) -> Result<Vec<u8>, String> {
+    self.engine.finish_ack(&tx_id, &signature)
   }
 }
 

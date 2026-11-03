@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
   default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 63352856;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 206241451;
 
 // Section: executor
 
@@ -807,6 +807,58 @@ fn wire__crate__api__PayerTxEngine_expire_locked_impl(
     },
   )
 }
+fn wire__crate__api__PayerTxEngine_finish_propose_impl(
+  port_: flutter_rust_bridge::for_generated::MessagePort,
+  ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+  rust_vec_len_: i32,
+  data_len_: i32,
+) {
+  FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+    flutter_rust_bridge::for_generated::TaskInfo {
+      debug_name: "PayerTxEngine_finish_propose",
+      port: Some(port_),
+      mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+    },
+    move || {
+      let message = unsafe {
+        flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+          ptr_,
+          rust_vec_len_,
+          data_len_,
+        )
+      };
+      let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+      let api_that = <RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<PayerTxEngine>,
+      >>::sse_decode(&mut deserializer);
+      let api_prepared = <crate::prepared_propose::PreparedPropose>::sse_decode(&mut deserializer);
+      let api_signature = <Vec<u8>>::sse_decode(&mut deserializer);
+      deserializer.end();
+      move |context| {
+        transform_result_sse::<_, String>((move || {
+          let mut api_that_guard = None;
+          let decode_indices_ =
+            flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+              flutter_rust_bridge::for_generated::LockableOrderInfo::new(&api_that, 0, false),
+            ]);
+          for i in decode_indices_ {
+            match i {
+              0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+              _ => unreachable!(),
+            }
+          }
+          let api_that_guard = api_that_guard.unwrap();
+          let output_ok = crate::api::PayerTxEngine::finish_propose(
+            &*api_that_guard,
+            api_prepared,
+            api_signature,
+          )?;
+          std::result::Result::Ok(output_ok)
+        })())
+      }
+    },
+  )
+}
 fn wire__crate__api__PayerTxEngine_on_ack_impl(
   port_: flutter_rust_bridge::for_generated::MessagePort,
   ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -887,6 +939,100 @@ fn wire__crate__api__PayerTxEngine_open_impl(
             api_db_key,
             api_signing_seed,
             api_payee_public_key,
+          )?;
+          std::result::Result::Ok(output_ok)
+        })())
+      }
+    },
+  )
+}
+fn wire__crate__api__PayerTxEngine_open_external_impl(
+  port_: flutter_rust_bridge::for_generated::MessagePort,
+  ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+  rust_vec_len_: i32,
+  data_len_: i32,
+) {
+  FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+    flutter_rust_bridge::for_generated::TaskInfo {
+      debug_name: "PayerTxEngine_open_external",
+      port: Some(port_),
+      mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+    },
+    move || {
+      let message = unsafe {
+        flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+          ptr_,
+          rust_vec_len_,
+          data_len_,
+        )
+      };
+      let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+      let api_db_path = <String>::sse_decode(&mut deserializer);
+      let api_db_key = <Vec<u8>>::sse_decode(&mut deserializer);
+      let api_own_public_key = <Vec<u8>>::sse_decode(&mut deserializer);
+      let api_payee_public_key = <Vec<u8>>::sse_decode(&mut deserializer);
+      deserializer.end();
+      move |context| {
+        transform_result_sse::<_, String>((move || {
+          let output_ok = crate::api::PayerTxEngine::open_external(
+            api_db_path,
+            api_db_key,
+            api_own_public_key,
+            api_payee_public_key,
+          )?;
+          std::result::Result::Ok(output_ok)
+        })())
+      }
+    },
+  )
+}
+fn wire__crate__api__PayerTxEngine_prepare_propose_impl(
+  port_: flutter_rust_bridge::for_generated::MessagePort,
+  ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+  rust_vec_len_: i32,
+  data_len_: i32,
+) {
+  FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+    flutter_rust_bridge::for_generated::TaskInfo {
+      debug_name: "PayerTxEngine_prepare_propose",
+      port: Some(port_),
+      mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+    },
+    move || {
+      let message = unsafe {
+        flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+          ptr_,
+          rust_vec_len_,
+          data_len_,
+        )
+      };
+      let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+      let api_that = <RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<PayerTxEngine>,
+      >>::sse_decode(&mut deserializer);
+      let api_spend_body = <Vec<u8>>::sse_decode(&mut deserializer);
+      let api_counter = <u64>::sse_decode(&mut deserializer);
+      let api_recipient_id = <Vec<u8>>::sse_decode(&mut deserializer);
+      deserializer.end();
+      move |context| {
+        transform_result_sse::<_, String>((move || {
+          let mut api_that_guard = None;
+          let decode_indices_ =
+            flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+              flutter_rust_bridge::for_generated::LockableOrderInfo::new(&api_that, 0, false),
+            ]);
+          for i in decode_indices_ {
+            match i {
+              0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+              _ => unreachable!(),
+            }
+          }
+          let api_that_guard = api_that_guard.unwrap();
+          let output_ok = crate::api::PayerTxEngine::prepare_propose(
+            &*api_that_guard,
+            api_spend_body,
+            api_counter,
+            api_recipient_id,
           )?;
           std::result::Result::Ok(output_ok)
         })())
@@ -994,6 +1140,55 @@ fn wire__crate__api__PayerTxEngine_resume_pending_impl(
     },
   )
 }
+fn wire__crate__api__ReceiverTxEngine_finish_ack_impl(
+  port_: flutter_rust_bridge::for_generated::MessagePort,
+  ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+  rust_vec_len_: i32,
+  data_len_: i32,
+) {
+  FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+    flutter_rust_bridge::for_generated::TaskInfo {
+      debug_name: "ReceiverTxEngine_finish_ack",
+      port: Some(port_),
+      mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+    },
+    move || {
+      let message = unsafe {
+        flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+          ptr_,
+          rust_vec_len_,
+          data_len_,
+        )
+      };
+      let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+      let api_that = <RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ReceiverTxEngine>,
+      >>::sse_decode(&mut deserializer);
+      let api_tx_id = <Vec<u8>>::sse_decode(&mut deserializer);
+      let api_signature = <Vec<u8>>::sse_decode(&mut deserializer);
+      deserializer.end();
+      move |context| {
+        transform_result_sse::<_, String>((move || {
+          let mut api_that_guard = None;
+          let decode_indices_ =
+            flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+              flutter_rust_bridge::for_generated::LockableOrderInfo::new(&api_that, 0, false),
+            ]);
+          for i in decode_indices_ {
+            match i {
+              0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+              _ => unreachable!(),
+            }
+          }
+          let api_that_guard = api_that_guard.unwrap();
+          let output_ok =
+            crate::api::ReceiverTxEngine::finish_ack(&*api_that_guard, api_tx_id, api_signature)?;
+          std::result::Result::Ok(output_ok)
+        })())
+      }
+    },
+  )
+}
 fn wire__crate__api__ReceiverTxEngine_on_propose_impl(
   port_: flutter_rust_bridge::for_generated::MessagePort,
   ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1077,6 +1272,143 @@ fn wire__crate__api__ReceiverTxEngine_open_impl(
             api_payer_public_key,
             api_own_account_id,
           )?;
+          std::result::Result::Ok(output_ok)
+        })())
+      }
+    },
+  )
+}
+fn wire__crate__api__ReceiverTxEngine_open_external_impl(
+  port_: flutter_rust_bridge::for_generated::MessagePort,
+  ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+  rust_vec_len_: i32,
+  data_len_: i32,
+) {
+  FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+    flutter_rust_bridge::for_generated::TaskInfo {
+      debug_name: "ReceiverTxEngine_open_external",
+      port: Some(port_),
+      mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+    },
+    move || {
+      let message = unsafe {
+        flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+          ptr_,
+          rust_vec_len_,
+          data_len_,
+        )
+      };
+      let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+      let api_db_path = <String>::sse_decode(&mut deserializer);
+      let api_db_key = <Vec<u8>>::sse_decode(&mut deserializer);
+      let api_own_public_key = <Vec<u8>>::sse_decode(&mut deserializer);
+      let api_payer_public_key = <Vec<u8>>::sse_decode(&mut deserializer);
+      let api_own_account_id = <Vec<u8>>::sse_decode(&mut deserializer);
+      deserializer.end();
+      move |context| {
+        transform_result_sse::<_, String>((move || {
+          let output_ok = crate::api::ReceiverTxEngine::open_external(
+            api_db_path,
+            api_db_key,
+            api_own_public_key,
+            api_payer_public_key,
+            api_own_account_id,
+          )?;
+          std::result::Result::Ok(output_ok)
+        })())
+      }
+    },
+  )
+}
+fn wire__crate__api__ReceiverTxEngine_prepare_ack_impl(
+  port_: flutter_rust_bridge::for_generated::MessagePort,
+  ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+  rust_vec_len_: i32,
+  data_len_: i32,
+) {
+  FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+    flutter_rust_bridge::for_generated::TaskInfo {
+      debug_name: "ReceiverTxEngine_prepare_ack",
+      port: Some(port_),
+      mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+    },
+    move || {
+      let message = unsafe {
+        flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+          ptr_,
+          rust_vec_len_,
+          data_len_,
+        )
+      };
+      let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+      let api_that = <RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ReceiverTxEngine>,
+      >>::sse_decode(&mut deserializer);
+      let api_tx_id = <Vec<u8>>::sse_decode(&mut deserializer);
+      deserializer.end();
+      move |context| {
+        transform_result_sse::<_, String>((move || {
+          let mut api_that_guard = None;
+          let decode_indices_ =
+            flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+              flutter_rust_bridge::for_generated::LockableOrderInfo::new(&api_that, 0, false),
+            ]);
+          for i in decode_indices_ {
+            match i {
+              0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+              _ => unreachable!(),
+            }
+          }
+          let api_that_guard = api_that_guard.unwrap();
+          let output_ok = crate::api::ReceiverTxEngine::prepare_ack(&*api_that_guard, api_tx_id)?;
+          std::result::Result::Ok(output_ok)
+        })())
+      }
+    },
+  )
+}
+fn wire__crate__api__ReceiverTxEngine_store_propose_impl(
+  port_: flutter_rust_bridge::for_generated::MessagePort,
+  ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+  rust_vec_len_: i32,
+  data_len_: i32,
+) {
+  FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+    flutter_rust_bridge::for_generated::TaskInfo {
+      debug_name: "ReceiverTxEngine_store_propose",
+      port: Some(port_),
+      mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+    },
+    move || {
+      let message = unsafe {
+        flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+          ptr_,
+          rust_vec_len_,
+          data_len_,
+        )
+      };
+      let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+      let api_that = <RustOpaqueMoi<
+        flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ReceiverTxEngine>,
+      >>::sse_decode(&mut deserializer);
+      let api_propose = <Vec<u8>>::sse_decode(&mut deserializer);
+      deserializer.end();
+      move |context| {
+        transform_result_sse::<_, String>((move || {
+          let mut api_that_guard = None;
+          let decode_indices_ =
+            flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+              flutter_rust_bridge::for_generated::LockableOrderInfo::new(&api_that, 0, false),
+            ]);
+          for i in decode_indices_ {
+            match i {
+              0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+              _ => unreachable!(),
+            }
+          }
+          let api_that_guard = api_that_guard.unwrap();
+          let output_ok =
+            crate::api::ReceiverTxEngine::store_propose(&*api_that_guard, api_propose)?;
           std::result::Result::Ok(output_ok)
         })())
       }
@@ -1515,6 +1847,36 @@ impl SseDecode for Option<Vec<u8>> {
   }
 }
 
+impl SseDecode for crate::prepared_ack::PreparedAck {
+  // Codec=Sse (Serialization based), see doc to use other codecs
+  fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+    let mut var_txId = <Vec<u8>>::sse_decode(deserializer);
+    let mut var_message = <Vec<u8>>::sse_decode(deserializer);
+    let mut var_existingAck = <Option<Vec<u8>>>::sse_decode(deserializer);
+    return crate::prepared_ack::PreparedAck {
+      tx_id: var_txId,
+      message: var_message,
+      existing_ack: var_existingAck,
+    };
+  }
+}
+
+impl SseDecode for crate::prepared_propose::PreparedPropose {
+  // Codec=Sse (Serialization based), see doc to use other codecs
+  fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+    let mut var_message = <Vec<u8>>::sse_decode(deserializer);
+    let mut var_body = <Vec<u8>>::sse_decode(deserializer);
+    let mut var_counter = <u64>::sse_decode(deserializer);
+    let mut var_existingPropose = <Option<Vec<u8>>>::sse_decode(deserializer);
+    return crate::prepared_propose::PreparedPropose {
+      message: var_message,
+      body: var_body,
+      counter: var_counter,
+      existing_propose: var_existingPropose,
+    };
+  }
+}
+
 impl SseDecode for u32 {
   // Codec=Sse (Serialization based), see doc to use other codecs
   fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1577,15 +1939,22 @@ fn pde_ffi_dispatcher_primary_impl(
     15 => wire__crate__api__NoiseSession_read_message_impl(port, ptr, rust_vec_len, data_len),
     16 => wire__crate__api__NoiseSession_write_message_impl(port, ptr, rust_vec_len, data_len),
     17 => wire__crate__api__PayerTxEngine_expire_locked_impl(port, ptr, rust_vec_len, data_len),
-    18 => wire__crate__api__PayerTxEngine_on_ack_impl(port, ptr, rust_vec_len, data_len),
-    19 => wire__crate__api__PayerTxEngine_open_impl(port, ptr, rust_vec_len, data_len),
-    20 => wire__crate__api__PayerTxEngine_propose_impl(port, ptr, rust_vec_len, data_len),
-    21 => wire__crate__api__PayerTxEngine_resume_pending_impl(port, ptr, rust_vec_len, data_len),
-    22 => wire__crate__api__ReceiverTxEngine_on_propose_impl(port, ptr, rust_vec_len, data_len),
-    23 => wire__crate__api__ReceiverTxEngine_open_impl(port, ptr, rust_vec_len, data_len),
-    25 => wire__crate__api__core_selfcheck_impl(port, ptr, rust_vec_len, data_len),
-    27 => wire__crate__api__echo_impl(port, ptr, rust_vec_len, data_len),
-    28 => wire__crate__api__generate_lab_signing_key_impl(port, ptr, rust_vec_len, data_len),
+    18 => wire__crate__api__PayerTxEngine_finish_propose_impl(port, ptr, rust_vec_len, data_len),
+    19 => wire__crate__api__PayerTxEngine_on_ack_impl(port, ptr, rust_vec_len, data_len),
+    20 => wire__crate__api__PayerTxEngine_open_impl(port, ptr, rust_vec_len, data_len),
+    21 => wire__crate__api__PayerTxEngine_open_external_impl(port, ptr, rust_vec_len, data_len),
+    22 => wire__crate__api__PayerTxEngine_prepare_propose_impl(port, ptr, rust_vec_len, data_len),
+    23 => wire__crate__api__PayerTxEngine_propose_impl(port, ptr, rust_vec_len, data_len),
+    24 => wire__crate__api__PayerTxEngine_resume_pending_impl(port, ptr, rust_vec_len, data_len),
+    25 => wire__crate__api__ReceiverTxEngine_finish_ack_impl(port, ptr, rust_vec_len, data_len),
+    26 => wire__crate__api__ReceiverTxEngine_on_propose_impl(port, ptr, rust_vec_len, data_len),
+    27 => wire__crate__api__ReceiverTxEngine_open_impl(port, ptr, rust_vec_len, data_len),
+    28 => wire__crate__api__ReceiverTxEngine_open_external_impl(port, ptr, rust_vec_len, data_len),
+    29 => wire__crate__api__ReceiverTxEngine_prepare_ack_impl(port, ptr, rust_vec_len, data_len),
+    30 => wire__crate__api__ReceiverTxEngine_store_propose_impl(port, ptr, rust_vec_len, data_len),
+    32 => wire__crate__api__core_selfcheck_impl(port, ptr, rust_vec_len, data_len),
+    34 => wire__crate__api__echo_impl(port, ptr, rust_vec_len, data_len),
+    35 => wire__crate__api__generate_lab_signing_key_impl(port, ptr, rust_vec_len, data_len),
     _ => unreachable!(),
   }
 }
@@ -1602,10 +1971,10 @@ fn pde_ffi_dispatcher_sync_impl(
     12 => wire__crate__api__NoiseSession_is_finished_impl(ptr, rust_vec_len, data_len),
     13 => wire__crate__api__NoiseSession_new_initiator_impl(ptr, rust_vec_len, data_len),
     14 => wire__crate__api__NoiseSession_new_responder_impl(ptr, rust_vec_len, data_len),
-    24 => wire__crate__api__build_dtn_envelope_impl(ptr, rust_vec_len, data_len),
-    26 => wire__crate__api__core_version_impl(ptr, rust_vec_len, data_len),
-    29 => wire__crate__api__generate_noise_static_keypair_impl(ptr, rust_vec_len, data_len),
-    30 => wire__crate__api__ping_impl(ptr, rust_vec_len, data_len),
+    31 => wire__crate__api__build_dtn_envelope_impl(ptr, rust_vec_len, data_len),
+    33 => wire__crate__api__core_version_impl(ptr, rust_vec_len, data_len),
+    36 => wire__crate__api__generate_noise_static_keypair_impl(ptr, rust_vec_len, data_len),
+    37 => wire__crate__api__ping_impl(ptr, rust_vec_len, data_len),
     _ => unreachable!(),
   }
 }
@@ -1734,6 +2103,51 @@ impl flutter_rust_bridge::IntoDart for crate::api::NoiseKeypair {
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::NoiseKeypair {}
 impl flutter_rust_bridge::IntoIntoDart<crate::api::NoiseKeypair> for crate::api::NoiseKeypair {
   fn into_into_dart(self) -> crate::api::NoiseKeypair {
+    self
+  }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::prepared_ack::PreparedAck {
+  fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+    [
+      self.tx_id.into_into_dart().into_dart(),
+      self.message.into_into_dart().into_dart(),
+      self.existing_ack.into_into_dart().into_dart(),
+    ]
+    .into_dart()
+  }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+  for crate::prepared_ack::PreparedAck
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::prepared_ack::PreparedAck>
+  for crate::prepared_ack::PreparedAck
+{
+  fn into_into_dart(self) -> crate::prepared_ack::PreparedAck {
+    self
+  }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::prepared_propose::PreparedPropose {
+  fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+    [
+      self.message.into_into_dart().into_dart(),
+      self.body.into_into_dart().into_dart(),
+      self.counter.into_into_dart().into_dart(),
+      self.existing_propose.into_into_dart().into_dart(),
+    ]
+    .into_dart()
+  }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+  for crate::prepared_propose::PreparedPropose
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::prepared_propose::PreparedPropose>
+  for crate::prepared_propose::PreparedPropose
+{
+  fn into_into_dart(self) -> crate::prepared_propose::PreparedPropose {
     self
   }
 }
@@ -1900,6 +2314,25 @@ impl SseEncode for Option<Vec<u8>> {
     if let Some(value) = self {
       <Vec<u8>>::sse_encode(value, serializer);
     }
+  }
+}
+
+impl SseEncode for crate::prepared_ack::PreparedAck {
+  // Codec=Sse (Serialization based), see doc to use other codecs
+  fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+    <Vec<u8>>::sse_encode(self.tx_id, serializer);
+    <Vec<u8>>::sse_encode(self.message, serializer);
+    <Option<Vec<u8>>>::sse_encode(self.existing_ack, serializer);
+  }
+}
+
+impl SseEncode for crate::prepared_propose::PreparedPropose {
+  // Codec=Sse (Serialization based), see doc to use other codecs
+  fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+    <Vec<u8>>::sse_encode(self.message, serializer);
+    <Vec<u8>>::sse_encode(self.body, serializer);
+    <u64>::sse_encode(self.counter, serializer);
+    <Option<Vec<u8>>>::sse_encode(self.existing_propose, serializer);
   }
 }
 
