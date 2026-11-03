@@ -290,7 +290,7 @@ async fn runtime_role_cannot_bypass_the_ledger() {
     "INSERT INTO ledger_entries (account_id, kind, delta_available, delta_reserved, ref_id)
      SELECT account_id, 'GRANT', 1000000, 0, account_id FROM accounts LIMIT 1",
     "INSERT INTO accounts (account_id, public_key, attestation_level)
-     VALUES (decode(repeat('01', 16), 'hex'), decode(repeat('02', 33), 'hex'), 'LAB_SOFTWARE')",
+     VALUES (decode(repeat('01', 16), 'hex'), decode(repeat('02', 33), 'hex'), 'lab_software')",
     "INSERT INTO supply (cap, initial_grant) VALUES (1, 1)",
     "SELECT post_reserve(decode(repeat('03', 16), 'hex'))",
     "SELECT post_redeem(decode(repeat('03', 16), 'hex'))",
@@ -460,8 +460,16 @@ fn config_validation_rejects_out_of_range_values() {
     request_timeout_seconds: 1,
     max_concurrent_requests: 1,
     register_limit_per_minute: 1,
+    challenge_limit_per_minute: 1,
+    attestation_roots_pem_file: String::new(),
+    attestation_revocation_file: String::new(),
+    attestation_challenge_ttl_seconds: 60,
+    allow_tee_issuance: false,
   };
   assert!(valid().validate().is_ok());
+  let mut config = valid();
+  config.attestation_challenge_ttl_seconds = 61;
+  assert!(config.validate().is_err());
   let mut config = valid();
   config.cheque_max_count = 11;
   assert!(config.validate().is_err());
@@ -556,6 +564,8 @@ async fn junk_registrations_do_not_use_the_faucet_budget() {
     signature: random_bytes(64),
     attestation_level: meshpay_server::wire::attestation_level::AttestationLevel::LabSoftware
       as i32,
+    attestation_chain: Vec::new(),
+    challenge: Vec::new(),
   };
   for _ in 0..3 {
     let body = prost::Message::encode_to_vec(&junk);
