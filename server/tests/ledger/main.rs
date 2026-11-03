@@ -5,6 +5,7 @@ mod attestation_pki;
 mod attestation_registration;
 mod cases;
 mod deposit_race;
+mod deposit_throughput;
 mod equivocation_independent;
 mod independent_verifier;
 mod pv_sec_05;
