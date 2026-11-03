@@ -1,0 +1,202 @@
+//! PV-LED-01: random operations never break solvency (balances + reserves <= supply).
+//! Env: `MESHPAY_LEDGER_OPS` (default 10000, the PRD figure), `MESHPAY_LEDGER_SEED` (replay).
+use crate::random_source::RandomSource;
+use crate::support::{Client, random_bytes, setup};
+use axum::http::StatusCode;
+use meshpay_server::wire::cheque_spend::ChequeSpend;
+use meshpay_server::wire::cheque_stub::ChequeStub;
+use meshpay_server::wire::redeem_status::RedeemStatus;
+
+struct IssuedCheque {
+  payer: usize,
+  stub: ChequeStub,
+  max: u64,
+  short_lived: bool,
+  paid_spend: Option<ChequeSpend>,
+}
+
+#[tokio::test]
+async fn random_operations_keep_the_ledger_solvent() {
+  let Some(app) = setup(true).await else { return };
+  let ops: usize = std::env::var("MESHPAY_LEDGER_OPS")
+    .ok()
+    .and_then(|value| value.parse().ok())
+    .unwrap_or(10_000);
+  let (mut rng, seed) = RandomSource::from_env_or_os("MESHPAY_LEDGER_SEED");
+  eprintln!("PV-LED-01 seed={seed} ops={ops} (replay with MESHPAY_LEDGER_SEED={seed})");
+
+  let mut accounts: Vec<Client> = Vec::new();
+  let mut counters: Vec<u64> = Vec::new();
+  let mut cheques: Vec<IssuedCheque> = Vec::new();
+  for _ in 0..5 {
+    let client = Client::new();
+    client.register(&app).await;
+    accounts.push(client);
+    counters.push(0);
+  }
+  let mut last_sleep = 0;
+  let status_ok = |status: i32, allowed: &[RedeemStatus], what: &str| {
+    assert!(
+      allowed.iter().any(|a| *a as i32 == status),
+      "seed={seed}: {what}: unexpected status {status}"
+    );
+  };
+
+  for op in 0..ops {
+    let who = rng.below(accounts.len() as u64) as usize;
+    let roll = rng.below(100);
+    match roll {
+      0..10 => {
+        if accounts.len() < 200 {
+          let client = Client::new();
+          assert_eq!(
+            client.register(&app).await.0,
+            StatusCode::OK,
+            "seed={seed} op={op}"
+          );
+          accounts.push(client);
+          counters.push(0);
+        }
+      }
+      10..40 | 95..100 => {
+        let short_lived = rng.below(5) == 0;
+        let (count, max) = (1 + rng.below(3) as u32, 1 + rng.below(200));
+        let ttl = if short_lived { 1 } else { 3_600 };
+        let (status, book) = accounts[who]
+          .issue(&app, random_bytes(16), count, max, ttl)
+          .await;
+        match book {
+          Some(book) => {
+            for stub in book.stubs {
+              cheques.push(IssuedCheque {
+                payer: who,
+                stub,
+                max,
+                short_lived,
+                paid_spend: None,
+              });
+            }
+          }
+          None => assert!(
+            status == StatusCode::FORBIDDEN || status == StatusCode::UNPROCESSABLE_ENTITY,
+            "seed={seed} op={op}: issue status {status}"
+          ),
+        }
+      }
+      40..75 => {
+        let open: Vec<usize> = (0..cheques.len())
+          .filter(|i| cheques[*i].paid_spend.is_none())
+          .collect();
+        if open.is_empty() {
+          continue;
+        }
+        let index = open[rng.below(open.len() as u64) as usize];
+        let payer = cheques[index].payer;
+        let payee = (payer + 1 + rng.below(accounts.len() as u64 - 1) as usize) % accounts.len();
+        let amount = 1 + rng.below(cheques[index].max);
+        counters[payer] += 1;
+        let spend = accounts[payer].spend(
+          &cheques[index].stub,
+          &accounts[payee].account_id,
+          amount,
+          counters[payer],
+        );
+        let response = app.deposit(&cheques[index].stub, &spend).await;
+        let allowed: &[RedeemStatus] = if cheques[index].short_lived {
+          &[RedeemStatus::Paid, RedeemStatus::RejectedExpired]
+        } else {
+          &[RedeemStatus::Paid]
+        };
+        status_ok(
+          response.status,
+          allowed,
+          &format!("op={op} pay: {}", response.detail),
+        );
+        if response.status == RedeemStatus::Paid as i32 {
+          cheques[index].paid_spend = Some(spend);
+        }
+      }
+      75..85 => {
+        let open: Vec<usize> = (0..cheques.len())
+          .filter(|i| cheques[*i].paid_spend.is_none())
+          .collect();
+        if open.is_empty() || accounts.len() < 3 {
+          continue;
+        }
+        let index = open[rng.below(open.len() as u64) as usize];
+        let payer = cheques[index].payer;
+        let payee_a = (payer + 1) % accounts.len();
+        let payee_b = (payer + 2) % accounts.len();
+        counters[payer] += 1;
+        let stub = cheques[index].stub.clone();
+        let spend_a =
+          accounts[payer].spend(&stub, &accounts[payee_a].account_id, 1, counters[payer]);
+        let spend_b =
+          accounts[payer].spend(&stub, &accounts[payee_b].account_id, 1, counters[payer]);
+        let first = app.deposit(&stub, &spend_a).await;
+        let allowed = [RedeemStatus::Paid, RedeemStatus::RejectedExpired];
+        status_ok(first.status, &allowed, &format!("op={op} conflict first"));
+        if first.status == RedeemStatus::Paid as i32 {
+          cheques[index].paid_spend = Some(spend_a);
+          let second = app.deposit(&stub, &spend_b).await;
+          status_ok(
+            second.status,
+            &[RedeemStatus::RejectedConflict],
+            &format!("op={op} conflict"),
+          );
+        }
+      }
+      _ => {
+        let paid: Vec<usize> = (0..cheques.len())
+          .filter(|i| cheques[*i].paid_spend.is_some())
+          .collect();
+        if paid.is_empty() {
+          continue;
+        }
+        let cheque = &cheques[paid[rng.below(paid.len() as u64) as usize]];
+        let replay = app
+          .deposit(&cheque.stub, cheque.paid_spend.as_ref().unwrap())
+          .await;
+        let allowed = [RedeemStatus::AlreadyRedeemedSameBody];
+        status_ok(replay.status, &allowed, &format!("op={op} replay"));
+      }
+    }
+
+    // Expiry: let short-lived cheques lapse, then every account's next issue releases them.
+    if op - last_sleep >= ops.max(5) / 5 {
+      last_sleep = op;
+      tokio::time::sleep(std::time::Duration::from_millis(2_100)).await;
+      for client in &accounts {
+        let _ = client.issue(&app, random_bytes(16), 1, 1, 60).await;
+      }
+    }
+
+    let (over_supply, negative): (bool, i64) = sqlx::query_as(
+      "SELECT (SELECT coalesce(sum(available + reserved), 0)::bigint FROM balances)
+                <= (SELECT granted FROM supply),
+              (SELECT count(*) FROM balances WHERE available < 0 OR reserved < 0)",
+    )
+    .fetch_one(&app.pool)
+    .await
+    .unwrap();
+    assert!(
+      over_supply && negative == 0,
+      "seed={seed} op={op}: over_supply_ok={over_supply} negative={negative}"
+    );
+    if op % 100 == 0 {
+      let ids: Vec<Vec<u8>> = accounts.iter().map(|c| c.account_id.clone()).collect();
+      let total: i64 = sqlx::query_scalar(
+        "SELECT coalesce(sum(available + reserved), 0)::bigint FROM balances WHERE account_id = ANY($1)",
+      )
+      .bind(&ids)
+      .fetch_one(&app.pool)
+      .await
+      .unwrap();
+      assert_eq!(
+        total,
+        10_000 * ids.len() as i64,
+        "seed={seed} op={op}: money not conserved"
+      );
+    }
+  }
+}
