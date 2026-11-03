@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[features]
+# LAB ONLY tools (`lab-key-cert`); enabled by the compose lab image build.
+lab = []
+
 [dependencies]
 axum = "0.8.9"
 base64 = "0.23.1"
