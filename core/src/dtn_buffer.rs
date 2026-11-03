@@ -16,6 +16,8 @@ use std::time::{Duration, Instant};
 pub const MAX_ENVELOPE_BYTES: usize = 5 * 1024;
 pub const BUFFER_CAP_BYTES: i64 = 5 * 1024 * 1024;
 /// Envelopes per connection, both directions: sent per call and accepted-or-rejected per session.
+/// PRD 8.1 DoS: one origin pair holds at most 1 MB of the buffer per day.
+pub const MAX_PER_PAIR_BYTES: i64 = 1024 * 1024;
 pub const MAX_PER_CONNECTION: usize = 20;
 /// Upper bound of `E` (24 to 168 h, PRD 9; free choice, no source). Applied to the local
 /// `received_at_unix`, never to the wire `created_at_unix`.
@@ -32,7 +34,8 @@ CREATE TABLE IF NOT EXISTS dtn_envelopes (
   ttl_hops INTEGER NOT NULL CHECK (ttl_hops BETWEEN 0 AND 4),
   known_revocation_version INTEGER NOT NULL CHECK (known_revocation_version >= 0),
   encrypted_server_batch BLOB NOT NULL CHECK (length(encrypted_server_batch) > 0),
-  size_bytes INTEGER NOT NULL CHECK (size_bytes BETWEEN 1 AND 5120)
+  size_bytes INTEGER NOT NULL CHECK (size_bytes BETWEEN 1 AND 5120),
+  origin_pair BLOB
 ) STRICT;
 CREATE INDEX IF NOT EXISTS dtn_envelopes_eviction ON dtn_envelopes (ttl_hops, received_at_unix);
 CREATE TABLE IF NOT EXISTS dtn_snapshot (
@@ -41,6 +44,27 @@ CREATE TABLE IF NOT EXISTS dtn_snapshot (
   issued_at_unix INTEGER NOT NULL CHECK (issued_at_unix >= 0),
   snapshot_bytes BLOB NOT NULL
 ) STRICT;"
+}
+
+/// Databases created before `origin_pair` lack the column; add it, then index it.
+fn migrate_origin_pair(connection: &Connection) -> Result<(), String> {
+  let has_column: bool = connection
+    .query_row(
+      "SELECT COUNT(*) > 0 FROM pragma_table_info('dtn_envelopes') WHERE name = 'origin_pair'",
+      [],
+      |row| row.get(0),
+    )
+    .map_err(sql_error)?;
+  if !has_column {
+    connection
+      .execute_batch("ALTER TABLE dtn_envelopes ADD COLUMN origin_pair BLOB")
+      .map_err(sql_error)?;
+  }
+  connection
+    .execute_batch(
+      "CREATE INDEX IF NOT EXISTS dtn_envelopes_pair ON dtn_envelopes (origin_pair, received_at_unix)",
+    )
+    .map_err(sql_error)
 }
 
 /// Third-party envelope buffer and gossip exchange logic (PRD 8.1), foreground only.
@@ -110,8 +134,10 @@ impl DtnEngine {
     if cap_bytes <= 0 || max_ingest_per_minute == 0 {
       return Err("cap and ingest rate limit must be positive".to_owned());
     }
+    let connection = open_database(db_path, db_key, schema())?;
+    migrate_origin_pair(&connection)?;
     Ok(Self {
-      connection: Mutex::new(open_database(db_path, db_key, schema())?),
+      connection: Mutex::new(connection),
       snapshot_key: verifying_key_from_sec1(snapshot_public_key)?,
       cap_bytes,
       max_ingest_per_minute: max_ingest_per_minute as usize,
@@ -125,6 +151,21 @@ impl DtnEngine {
   /// touched. A duplicate only raises the stored `ttl_hops` (never `received_at`). No per-connection
   /// budget here: peer traffic must go through `DtnPeerSession`. Never panics on bytes.
   pub fn ingest(&self, envelope_bytes: &[u8], now_unix: u64) -> Result<IngestOutcome, String> {
+    self.ingest_from(envelope_bytes, now_unix, None)
+  }
+
+  /// `None` is uncapped: callers must pass a pair key derived from the authenticated session
+  /// (never from peer-supplied bytes). The key is hashed to 32 bytes before storing or counting.
+  /// `origin_pair` is an opaque key of the (sender, receiver) pair of the connection the envelope
+  /// came over (the wire `SyncEnvelope` carries none); `Some` caps that pair at
+  /// `MAX_PER_PAIR_BYTES` received in the last day, refusing instead of evicting others.
+  pub fn ingest_from(
+    &self,
+    envelope_bytes: &[u8],
+    now_unix: u64,
+    origin_pair: Option<&[u8]>,
+  ) -> Result<IngestOutcome, String> {
+    let origin_pair = origin_pair.map(|pair| Sha256::digest(pair).to_vec());
     self.check_caller_clock(now_unix)?;
     if !self.admit()? {
       return Ok(IngestOutcome::RateLimited);
@@ -163,6 +204,19 @@ impl DtnEngine {
       transaction.commit().map_err(sql_error)?;
       return Ok(IngestOutcome::Duplicate);
     }
+    if let Some(pair) = &origin_pair {
+      let held: i64 = transaction
+        .query_row(
+          "SELECT COALESCE(SUM(size_bytes), 0) FROM dtn_envelopes
+           WHERE origin_pair = ?1 AND received_at_unix > ?2",
+          params![pair, to_sql_integer(now_unix.saturating_sub(86_400))?],
+          |row| row.get(0),
+        )
+        .map_err(sql_error)?;
+      if held + size > MAX_PER_PAIR_BYTES {
+        return Ok(IngestOutcome::Refused);
+      }
+    }
     let needed = total_bytes(&transaction)? + size - self.cap_bytes;
     if needed > 0 {
       let Some(victims) = victims(&transaction, envelope.ttl_hops, needed)? else {
@@ -178,8 +232,8 @@ impl DtnEngine {
       .execute(
         "INSERT INTO dtn_envelopes
            (envelope_id, created_at_unix, received_at_unix, ttl_hops, known_revocation_version,
-            encrypted_server_batch, size_bytes)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            encrypted_server_batch, size_bytes, origin_pair)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
           envelope.envelope_id,
           to_sql_integer(envelope.created_at_unix)?,
@@ -187,7 +241,8 @@ impl DtnEngine {
           envelope.ttl_hops,
           to_sql_integer(envelope.known_revocation_version)?,
           envelope.encrypted_server_batch,
-          size
+          size,
+          origin_pair
         ],
       )
       .map_err(sql_error)?;
