@@ -62,14 +62,15 @@ fn parse_chain<'a>(
     })
     .collect::<Result<Vec<_>, _>>()?;
   let now = ASN1Time::from_timestamp(now_unix).map_err(|_| AttestationError::CertParse)?;
-  for cert in &certs {
+  for (cert, der) in certs.iter().zip(chain) {
     if store
       .revoked_serials
       .contains(&cert.serial.to_str_radix(16))
     {
       return Err(AttestationError::CertRevoked);
     }
-    if !cert.validity().is_valid_at(now) {
+    // Configured anchors are exempt from the date check, whether included or omitted.
+    if !store.anchors.contains(der) && !cert.validity().is_valid_at(now) {
       return Err(AttestationError::CertExpired);
     }
   }

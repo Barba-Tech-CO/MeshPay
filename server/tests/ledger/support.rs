@@ -183,6 +183,11 @@ impl Client {
     Self { key, account_id }
   }
 
+  /// Raw private scalar, only to check that proofs never carry it.
+  pub fn secret_bytes(&self) -> Vec<u8> {
+    self.key.to_bytes().to_vec()
+  }
+
   pub fn verifying_key(&self) -> p256::ecdsa::VerifyingKey {
     *self.key.verifying_key()
   }

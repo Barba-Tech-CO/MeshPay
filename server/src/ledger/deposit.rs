@@ -40,12 +40,12 @@ fn field_len_ok(body: &ChequeSpendBody) -> bool {
 
 /// Deposit of one `ChequeSpend` by the receiver (PRD 7.3). Domain outcomes come back as a
 /// `DepositResponse` status; only malformed requests and internal failures are `ApiError`.
-/// `now_unix` only feeds the cheap pre-lock expiry check; once the account rows are locked the
-/// clock is read again and `cheque_releases` is consulted, and that post-lock check decides.
+/// Once the account rows are locked, existing redemptions are consulted first (resend returns the
+/// previous result, a different body is an equivocation, both even after expiry); only a cheque
+/// never redeemed is then refused by `cheque_releases` or the clock.
 pub async fn deposit(
   state: &AppState,
   request: DepositRequest,
-  now_unix: u64,
 ) -> Result<DepositResponse, ApiError> {
   let (Some(stub), Some(spend)) = (request.stub, request.spend) else {
     return Err(ApiError::BadRequest(
@@ -96,8 +96,18 @@ pub async fn deposit(
   if body.payee_account_id == payer {
     return invalid("payer and payee are the same account");
   }
-  if now_unix > stub_body.expires_at_unix {
-    return Ok(outcome(RedeemStatus::RejectedExpired, "cheque expired"));
+
+  // Unlocked early refusal: an expired cheque with no redemption can never become redeemable
+  // (a redemption needs an unexpired cheque), so expired spam never takes row locks.
+  if unix_now()? > stub_body.expires_at_unix {
+    let redeemed: bool =
+      sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM redemptions WHERE cheque_id = $1)")
+        .bind(&body.cheque_id)
+        .fetch_one(&state.pool)
+        .await?;
+    if !redeemed {
+      return Ok(outcome(RedeemStatus::RejectedExpired, "cheque expired"));
+    }
   }
 
   // Both account rows, in id order, so opposite-direction deposits cannot deadlock.

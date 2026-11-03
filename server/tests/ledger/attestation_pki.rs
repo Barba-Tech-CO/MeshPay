@@ -152,23 +152,31 @@ pub struct Pki {
   intermediate: Issuer<'static, KeyPair>,
 }
 
-fn ca_params(name: &str) -> CertificateParams {
+fn ca_params(name: &str, not_after: OffsetDateTime) -> CertificateParams {
   let mut params = CertificateParams::new(Vec::<String>::new()).unwrap();
   params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
   params.distinguished_name.push(DnType::CommonName, name);
   params.not_before = date_time_ymd(2020, 1, 1);
-  params.not_after = date_time_ymd(2099, 1, 1);
+  params.not_after = not_after;
   params
 }
 
 impl Pki {
   pub fn new() -> Self {
+    Self::with_ca_expiry(date_time_ymd(2099, 1, 1), date_time_ymd(2099, 1, 1))
+  }
+
+  /// Root and intermediate `notAfter`, to model expired CAs.
+  pub fn with_ca_expiry(
+    root_not_after: OffsetDateTime,
+    intermediate_not_after: OffsetDateTime,
+  ) -> Self {
     let root_key = KeyPair::generate().unwrap();
-    let root_params = ca_params("test root");
+    let root_params = ca_params("test root", root_not_after);
     let root: Certificate = root_params.self_signed(&root_key).unwrap();
     let root_issuer = Issuer::new(root_params, root_key);
     let intermediate_key = KeyPair::generate().unwrap();
-    let intermediate_params = ca_params("test intermediate");
+    let intermediate_params = ca_params("test intermediate", intermediate_not_after);
     let intermediate = intermediate_params
       .signed_by(&intermediate_key, &root_issuer)
       .unwrap();
