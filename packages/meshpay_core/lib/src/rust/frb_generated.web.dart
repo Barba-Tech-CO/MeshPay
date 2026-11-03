@@ -15,6 +15,9 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated_web.dart';
 
+import 'prepared_ack.dart';
+import 'prepared_propose.dart';
+
 abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustLibApiImplPlatform({
     required super.handler,
@@ -146,6 +149,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  PreparedPropose dco_decode_box_autoadd_prepared_propose(dynamic raw);
+
+  @protected
   CoreSelfcheck dco_decode_core_selfcheck(dynamic raw);
 
   @protected
@@ -165,6 +171,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  PreparedAck dco_decode_prepared_ack(dynamic raw);
+
+  @protected
+  PreparedPropose dco_decode_prepared_propose(dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
@@ -284,6 +296,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  PreparedPropose sse_decode_box_autoadd_prepared_propose(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   CoreSelfcheck sse_decode_core_selfcheck(SseDeserializer deserializer);
 
   @protected
@@ -305,6 +322,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  PreparedAck sse_decode_prepared_ack(SseDeserializer deserializer);
+
+  @protected
+  PreparedPropose sse_decode_prepared_propose(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_32(SseDeserializer deserializer);
@@ -443,6 +466,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_prepared_propose(
+    PreparedPropose self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_core_selfcheck(CoreSelfcheck self, SseSerializer serializer);
 
   @protected
@@ -469,6 +498,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_list_prim_u_8_strict(
     Uint8List? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_prepared_ack(PreparedAck self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_prepared_propose(
+    PreparedPropose self,
     SseSerializer serializer,
   );
 
