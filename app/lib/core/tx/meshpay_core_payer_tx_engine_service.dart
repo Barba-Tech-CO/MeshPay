@@ -45,10 +45,12 @@ class MeshpayCorePayerTxEngineService implements PayerTxEngineService {
     required Uint8List spendBody,
     required int counter,
     required Uint8List recipientId,
+    required Uint8List stub,
   }) => _opened.propose(
     spendBody: spendBody,
     counter: BigInt.from(counter),
     recipientId: recipientId,
+    stub: stub,
   );
 
   @override

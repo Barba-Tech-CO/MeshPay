@@ -13,6 +13,9 @@ class MeshpayCoreNoiseChannel implements NoiseChannel {
   bool get isFinished => _session.isFinished();
 
   @override
+  Uint8List get peerPairKey => _session.peerPairKey();
+
+  @override
   Future<Uint8List> writeMessage() =>
       _session.writeMessage(payload: Uint8List(0));
 

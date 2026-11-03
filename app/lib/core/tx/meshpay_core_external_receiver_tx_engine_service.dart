@@ -2,23 +2,35 @@ import 'dart:typed_data';
 
 import 'package:meshpay_core/meshpay_core.dart';
 
+import '../ble/native_lab_service.dart';
+import '../dtn/dtn_buffer_service.dart';
+import '../dtn/lab_dtn_snapshot_key_helper.dart';
 import '../keys/payment_key_identity.dart';
 import '../keys/payment_key_signer.dart';
 import '../storage/app_support_directory_service.dart';
 import 'external_tx_signing_helper.dart';
+import 'lab_cheque_stub_helper.dart';
 import 'lab_tx_storage_helper.dart';
+import 'receiver_clock_helper.dart';
 import 'receiver_tx_engine_service.dart';
 
 /// Receiver engine whose acks are signed by the Keystore key `lab_receiver`.
 class MeshpayCoreExternalReceiverTxEngineService
     implements ReceiverTxEngineService {
-  MeshpayCoreExternalReceiverTxEngineService(this._directory, this._signer);
+  MeshpayCoreExternalReceiverTxEngineService(
+    this._directory,
+    this._signer,
+    this._dtn,
+    this._native,
+  );
 
   static const String _alias = 'lab_receiver';
   static const String _side = 'receiver_external';
 
   final AppSupportDirectoryService _directory;
   final PaymentKeySigner _signer;
+  final DtnBufferService _dtn;
+  final NativeLabService _native;
   ReceiverTxEngine? _engine;
 
   @override
@@ -35,17 +47,24 @@ class MeshpayCoreExternalReceiverTxEngineService
       ownPublicKey: identity.publicKey,
       payerPublicKey: payerPublicKey,
       ownAccountId: identity.publicKey,
+      snapshotPublicKey: LabDtnSnapshotKeyHelper.publicKey(),
+      expirySecs: BigInt.from(LabChequeStubHelper.expirySeconds),
     );
   }
 
   @override
-  Future<Uint8List> onPropose(Uint8List propose) {
+  Future<Uint8List> onPropose(Uint8List propose) async {
     final engine = _engine ?? (throw StateError('tx engine not open'));
     return ExternalTxSigningHelper.acknowledge(
       engine: engine,
       signer: _signer,
       alias: _alias,
       propose: propose,
+      clock: await ReceiverClockHelper.prepare(
+        engine: engine,
+        dtn: _dtn,
+        native: _native,
+      ),
     );
   }
 

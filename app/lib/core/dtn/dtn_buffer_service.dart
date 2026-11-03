@@ -11,7 +11,8 @@ abstract interface class DtnBufferService {
   Future<List<Uint8List>> missingFrom(List<Uint8List> peerSummary);
 
   /// One session per connected peer.
-  Future<DtnSessionService> openSession();
+  /// [originPair] is the Noise peer pair key; the pair's daily cap applies.
+  Future<DtnSessionService> openSession({required Uint8List originPair});
 
   /// Builds an envelope around [payload] (ttl 4 hops) and stores it locally.
   Future<void> addTestEnvelope(Uint8List payload);

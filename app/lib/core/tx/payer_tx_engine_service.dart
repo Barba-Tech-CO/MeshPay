@@ -10,11 +10,13 @@ abstract interface class PayerTxEngineService {
   /// Opens the engine for one payee; the cheque signature check is real.
   Future<void> open({required Uint8List payeePublicKey});
 
-  /// Returns the TX_PROPOSE bytes, durable before this returns.
+  /// Returns the TX_PROPOSE bytes, durable before this returns. [stub] is the
+  /// serialized server `ChequeStub` for the cheque named in [spendBody].
   Future<Uint8List> propose({
     required Uint8List spendBody,
     required int counter,
     required Uint8List recipientId,
+    required Uint8List stub,
   });
 
   /// Verifies the receiver ack; LOCKED becomes COMMITTED.

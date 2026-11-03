@@ -225,7 +225,7 @@ class L2capPayerLabViewModel extends ChangeNotifier {
 
   Future<void> syncDtn() => _runOnLink(
     'Conecte-se ao receptor antes de sincronizar.',
-    (session) => _dtnFlow.sync(session.exchangeEncrypted),
+    (session) => _dtnFlow.sync(session.exchangeEncrypted, session.peerPairKey),
     () => _dtnFlow.error,
   );
 

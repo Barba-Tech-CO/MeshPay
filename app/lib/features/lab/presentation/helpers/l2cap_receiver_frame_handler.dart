@@ -35,7 +35,11 @@ class L2capReceiverFrameHandler {
         await tx.handle(frame.payload, session.sendEncrypted);
         return tx.error;
       case LabFrameType.dtn:
-        await gossip.handle(frame.payload, session.sendEncrypted);
+        await gossip.handle(
+          frame.payload,
+          session.sendEncrypted,
+          session.peerPairKey,
+        );
         return gossip.error;
       case LabFrameType.error:
         throw const FormatException('Quadro de erro inesperado.');
