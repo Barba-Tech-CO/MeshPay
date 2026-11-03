@@ -5,6 +5,11 @@ use p256::ecdsa::{
 };
 use sha2::{Digest, Sha256};
 
+/// Length of an account id or server key id (`key_id`).
+pub const KEY_ID_LEN: usize = 16;
+/// Length of a compressed SEC1 P-256 public key.
+pub const COMPRESSED_PUBLIC_KEY_LEN: usize = 33;
+
 pub fn signing_key_from_seed(seed: &[u8]) -> Result<SigningKey, String> {
   SigningKey::from_slice(seed).map_err(|error| format!("signing key: {error}"))
 }
@@ -36,5 +41,5 @@ pub fn verify(public_key: &[u8], message: &[u8], signature: &[u8]) -> Result<(),
 
 /// First 16 bytes of SHA-256 of the compressed public key: account id and server key id.
 pub fn key_id(public_key: &[u8]) -> Vec<u8> {
-  Sha256::digest(public_key)[..16].to_vec()
+  Sha256::digest(public_key)[..KEY_ID_LEN].to_vec()
 }

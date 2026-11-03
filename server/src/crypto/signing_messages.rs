@@ -29,3 +29,14 @@ pub fn balance_message(account_id: &[u8], timestamp: u64) -> Vec<u8> {
   ]
   .concat()
 }
+
+/// Message the offline root signs: a `ServerKeyCertBody`.
+pub fn server_key_cert_message(cert_body_bytes: &[u8]) -> Vec<u8> {
+  [b"meshpay/server-key-cert/v1".as_slice(), cert_body_bytes].concat()
+}
+
+/// Message a SNAPSHOT key (or the root) signs: the snapshot with `server_signature` empty.
+/// Same bytes as `core::dtn_snapshot::snapshot_signing_message`.
+pub fn snapshot_signing_message(unsigned_snapshot_bytes: &[u8]) -> Vec<u8> {
+  [b"meshpay/snapshot/v1".as_slice(), unsigned_snapshot_bytes].concat()
+}

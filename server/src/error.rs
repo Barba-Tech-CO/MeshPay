@@ -10,6 +10,12 @@ pub enum ApiError {
   Internal(String),
 }
 
+impl ApiError {
+  pub fn forbidden(message: impl Into<String>) -> Self {
+    Self::Forbidden(message.into())
+  }
+}
+
 impl From<sqlx::Error> for ApiError {
   fn from(error: sqlx::Error) -> Self {
     // 23514 = check_violation: a database invariant (balance, supply, chequebook shape) refused it.
