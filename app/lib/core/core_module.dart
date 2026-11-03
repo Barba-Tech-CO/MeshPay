@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:meshpay_native/meshpay_native.dart';
 
@@ -17,6 +18,8 @@ import 'keys/meshpay_native_payment_key_signer.dart';
 import 'keys/payment_key_signer.dart';
 import 'noise/meshpay_core_noise_service.dart';
 import 'noise/noise_service.dart';
+import 'server/client/dio_server_client.dart';
+import 'server/client/server_client.dart';
 import 'storage/app_support_directory_service.dart';
 import 'storage/path_provider_app_support_directory_service.dart';
 import 'tx/meshpay_core_external_payer_tx_engine_service.dart';
@@ -54,6 +57,15 @@ final coreModule = createModule(
             ? MeshpayCoreExternalReceiverTxEngineService.new
             : MeshpayCoreReceiverTxEngineService.new,
       )
+      ..addSingleton<Dio>(
+        () => Dio(
+          BaseOptions(
+            connectTimeout: const Duration(seconds: 5),
+            receiveTimeout: const Duration(seconds: 15),
+          ),
+        ),
+      )
+      ..addSingleton<ServerClient>(DioServerClient.new)
       ..addSingleton<DtnBufferService>(MeshpayCoreDtnBufferService.new)
       ..addSingleton<ClockLogRepository>(JsonLinesClockLogRepository.new);
   },
