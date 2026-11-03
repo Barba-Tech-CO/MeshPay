@@ -1,8 +1,9 @@
-use crate::crypto::p256_keys::verify;
-use crate::crypto::signing_messages::{spend_signing_message, stub_seal_message};
+use crate::crypto::p256_keys::{KEY_ID_LEN, verify};
+use crate::crypto::signing_messages::spend_signing_message;
 use crate::crypto::spend_hashing::{derive_tx_id, spend_hash};
 use crate::error::ApiError;
 use crate::http::proto_body::unix_now;
+use crate::ledger::server_keys::{self, KeyRefusal};
 use crate::ledger::stored::decode_stored;
 use crate::ledger::units::to_i64;
 use crate::ledger::{audit, balance, equivocation};
@@ -31,9 +32,26 @@ fn invalid(detail: &str) -> Result<DepositResponse, ApiError> {
   Ok(outcome(RedeemStatus::RejectedInvalid, detail))
 }
 
+impl From<KeyRefusal> for DepositResponse {
+  fn from(refusal: KeyRefusal) -> Self {
+    match refusal {
+      KeyRefusal::Invalid(reason) => outcome(RedeemStatus::RejectedInvalid, reason),
+      KeyRefusal::Expired => outcome(
+        RedeemStatus::RejectedInvalid,
+        "server key cert not current at issue time",
+      ),
+      KeyRefusal::Revoked => outcome(RedeemStatus::RejectedRevoked, "server key revoked"),
+      KeyRefusal::IssuedAfterFreeze => outcome(
+        RedeemStatus::RejectedRevoked,
+        "stub issued after the issuance freeze",
+      ),
+    }
+  }
+}
+
 fn field_len_ok(body: &ChequeSpendBody) -> bool {
   body.cheque_id.len() == 16
-    && body.payee_account_id.len() == 16
+    && body.payee_account_id.len() == KEY_ID_LEN
     && body.tx_id.len() == 32
     && (body.prev_spend_hash.is_empty() || body.prev_spend_hash.len() == 32)
 }
@@ -72,15 +90,6 @@ pub async fn deposit(
   };
   if stub_bytes != stub.encode_to_vec() {
     return invalid("stub differs from the issued stub");
-  }
-  if verify(
-    &state.public_key(),
-    &stub_seal_message(&stub.body),
-    &stub.server_signature,
-  )
-  .is_err()
-  {
-    return invalid("bad server seal");
   }
   let stub_body: ChequeStubBody = decode_stored(&stub.body, "stub body")?;
   let message = spend_signing_message(&spend.body);
@@ -159,6 +168,18 @@ pub async fn deposit(
       .await?;
   if released || unix_now()? > stub_body.expires_at_unix {
     return Ok(outcome(RedeemStatus::RejectedExpired, "cheque expired"));
+  }
+  // PV-SEC-05, on this transaction: refused after the resend/conflict answers above.
+  if let Some(refusal) = server_keys::stub_refusal(
+    &mut tx,
+    state,
+    &stub,
+    &stub_body.server_key_id,
+    &body.cheque_id,
+  )
+  .await?
+  {
+    return Ok(refusal.into());
   }
 
   let same_counter: Option<(Vec<u8>, Vec<u8>)> = sqlx::query_as(
