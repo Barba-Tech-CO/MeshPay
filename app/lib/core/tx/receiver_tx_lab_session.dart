@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'lab_frame_helper.dart';
+import 'lab_public_key_helper.dart';
 import 'receiver_tx_engine_service.dart';
 import 'tx_error_code.dart';
 import 'tx_error_message_helper.dart';
@@ -15,8 +16,6 @@ import 'tx_wire_helper.dart';
 /// Failures go back to the payer as fixed error codes, never raw text.
 class ReceiverTxLabSession {
   ReceiverTxLabSession(this._engine, this._onChanged);
-
-  static const int publicKeyBytes = 33;
 
   final ReceiverTxEngineService _engine;
   final void Function() _onChanged;
@@ -76,7 +75,7 @@ class ReceiverTxLabSession {
     if (_isOpen) {
       throw const TxLabException(TxErrorCode.helloRepeated);
     }
-    if (payerPublicKey.length != publicKeyBytes) {
+    if (!LabPublicKeyHelper.isValid(payerPublicKey)) {
       throw const TxLabException(TxErrorCode.invalidKey);
     }
     final generation = _generation;

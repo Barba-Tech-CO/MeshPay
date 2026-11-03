@@ -12,7 +12,8 @@ enum TxErrorCode {
   notCommittable,
   internal,
   dtnSummaryRepeated,
-  dtnRoundLimit;
+  dtnRoundLimit,
+  localKeyInconsistent;
 
   int get wire => index + 1;
 
