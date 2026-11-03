@@ -4,12 +4,14 @@ import '../../core/routes/app_routes.dart';
 import 'presentation/pages/bluetooth_lab_page.dart';
 import 'presentation/pages/channel_lab_page.dart';
 import 'presentation/pages/clock_lab_page.dart';
+import 'presentation/pages/hardware_key_lab_page.dart';
 import 'presentation/pages/l2cap_payer_lab_page.dart';
 import 'presentation/pages/l2cap_receiver_lab_page.dart';
 import 'presentation/pages/lab_page.dart';
 import 'presentation/view_models/bluetooth_lab_view_model.dart';
 import 'presentation/view_models/channel_lab_view_model.dart';
 import 'presentation/view_models/clock_lab_view_model.dart';
+import 'presentation/view_models/hardware_key_lab_view_model.dart';
 import 'presentation/view_models/l2cap_payer_lab_view_model.dart';
 import 'presentation/view_models/l2cap_receiver_lab_view_model.dart';
 
@@ -60,6 +62,15 @@ final labModule = createModule(
           );
         },
         child: (_, _) => const L2capPayerLabPage(),
+      )
+      ..route(
+        AppRoutes.labHardwareKeyPath,
+        provide: (scope) {
+          scope.addChangeNotifier<HardwareKeyLabViewModel>(
+            HardwareKeyLabViewModel.new,
+          );
+        },
+        child: (_, _) => const HardwareKeyLabPage(),
       );
   },
 );

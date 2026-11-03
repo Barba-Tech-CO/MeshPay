@@ -9,6 +9,7 @@ import 'package:meshpay/core/storage/app_support_directory_service.dart';
 import 'package:meshpay/features/lab/presentation/view_models/bluetooth_lab_view_model.dart';
 import 'package:meshpay/features/lab/presentation/view_models/channel_lab_view_model.dart';
 import 'package:meshpay/features/lab/presentation/view_models/clock_lab_view_model.dart';
+import 'package:meshpay/features/lab/presentation/view_models/hardware_key_lab_view_model.dart';
 import 'package:meshpay_native/meshpay_native.dart';
 
 void main() {
@@ -43,6 +44,7 @@ void main() {
       (AppRoutes.labClock, ClockLabViewModel),
       (AppRoutes.labChannel, ChannelLabViewModel),
       (AppRoutes.labBluetooth, BluetoothLabViewModel),
+      (AppRoutes.labHardwareKey, HardwareKeyLabViewModel),
     ];
 
     for (final (path, viewModelType) in routeViewModels) {

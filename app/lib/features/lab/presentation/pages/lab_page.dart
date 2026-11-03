@@ -54,6 +54,15 @@ class LabPage extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(height: 16),
+          SectionCardDs(
+            title: 'Chaves de hardware',
+            child: ListTile(
+              title: const Text('Chave de hardware'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.pushNamed(AppRoutes.labHardwareKey),
+            ),
+          ),
         ],
       ),
     );
