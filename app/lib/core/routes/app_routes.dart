@@ -13,4 +13,6 @@ class AppRoutes {
   static const String labL2capPayerPath = '/l2cap/payer';
   static const String labHardwareKey = '/lab/hardware-key';
   static const String labHardwareKeyPath = '/hardware-key';
+  static const String labServer = '/lab/server';
+  static const String labServerPath = '/server';
 }

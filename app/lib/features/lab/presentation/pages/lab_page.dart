@@ -63,6 +63,15 @@ class LabPage extends StatelessWidget {
               onTap: () => context.pushNamed(AppRoutes.labHardwareKey),
             ),
           ),
+          const SizedBox(height: 16),
+          SectionCardDs(
+            title: 'Servidor (Fase 4)',
+            child: ListTile(
+              title: const Text('Servidor do ledger'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.pushNamed(AppRoutes.labServer),
+            ),
+          ),
         ],
       ),
     );
