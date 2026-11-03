@@ -240,3 +240,39 @@ fn empty_and_garbage_chains() {
   let long = vec![f.ok_chain(&KeySpec::strongbox(&f.challenge))[0].clone(); 9];
   assert_eq!(f.verify(&long), Err(AttestationError::ChainTooLong));
 }
+
+fn expired_ca_fixture(root_not_after_year: i32, intermediate_not_after_year: i32) -> Fixture {
+  let mut f = Fixture::new();
+  f.pki = Pki::with_ca_expiry(
+    date_time_ymd(root_not_after_year, 1, 1),
+    date_time_ymd(intermediate_not_after_year, 1, 1),
+  );
+  f.store.anchors = vec![f.pki.root_der.clone()];
+  f
+}
+
+#[test]
+fn expired_anchor_included_in_chain_is_accepted() {
+  let f = expired_ca_fixture(2025, 2099);
+  let chain = f.ok_chain(&KeySpec::strongbox(&f.challenge));
+  assert_eq!(chain.len(), 3);
+  assert_eq!(f.verify(&chain), Ok(AccountLevel::Strongbox));
+  let mut cut = chain;
+  cut.pop();
+  assert_eq!(f.verify(&cut), Ok(AccountLevel::Strongbox));
+}
+
+#[test]
+fn expired_non_anchor_intermediate_is_refused() {
+  let f = expired_ca_fixture(2099, 2025);
+  let chain = f.ok_chain(&KeySpec::strongbox(&f.challenge));
+  assert_eq!(f.verify(&chain), Err(AttestationError::CertExpired));
+}
+
+#[test]
+fn expired_root_not_configured_is_refused() {
+  let mut f = expired_ca_fixture(2025, 2099);
+  f.store.anchors = vec![Pki::new().root_der];
+  let chain = f.ok_chain(&KeySpec::strongbox(&f.challenge));
+  assert_eq!(f.verify(&chain), Err(AttestationError::CertExpired));
+}

@@ -211,6 +211,79 @@ async fn expired_cheque_is_refused_and_reserve_returns() {
 }
 
 #[tokio::test]
+async fn expired_never_redeemed_deposit_is_refused_without_touching_balances() {
+  let Some(app) = setup(true).await else { return };
+  let (payer, payee) = (funded(&app).await, funded(&app).await);
+  let (_, book) = payer.issue(&app, random_bytes(16), 1, 100, 1).await;
+  let stub = &book.unwrap().stubs[0];
+  tokio::time::sleep(std::time::Duration::from_millis(2_100)).await;
+  let spend = payer.spend(stub, &payee.account_id, 10, 1);
+  for _ in 0..3 {
+    assert_eq!(
+      app.deposit(stub, &spend).await.status,
+      RedeemStatus::RejectedExpired as i32
+    );
+  }
+  assert_eq!(app.balance(&payee.account_id).await, (10_000, 0));
+  assert_eq!(app.balance(&payer.account_id).await, (9_900, 100));
+  let redemptions: i64 =
+    sqlx::query_scalar("SELECT count(*) FROM redemptions WHERE payer_account_id = $1")
+      .bind(&payer.account_id)
+      .fetch_one(&app.pool)
+      .await
+      .unwrap();
+  assert_eq!(redemptions, 0);
+}
+
+#[tokio::test]
+async fn resend_of_paid_body_after_expiry_returns_previous_result() {
+  let Some(app) = setup(true).await else { return };
+  let (payer, payee) = (funded(&app).await, funded(&app).await);
+  let (_, book) = payer.issue(&app, random_bytes(16), 1, 100, 1).await;
+  let stub = &book.unwrap().stubs[0];
+  let spend = payer.spend(stub, &payee.account_id, 10, 1);
+  assert_eq!(
+    app.deposit(stub, &spend).await.status,
+    RedeemStatus::Paid as i32
+  );
+  tokio::time::sleep(std::time::Duration::from_millis(2_100)).await;
+  assert_eq!(
+    app.deposit(stub, &spend).await.status,
+    RedeemStatus::AlreadyRedeemedSameBody as i32
+  );
+  assert_eq!(app.balance(&payee.account_id).await, (10_010, 0));
+}
+
+#[tokio::test]
+async fn conflicting_spend_deposited_after_expiry_gives_proof_and_freezes() {
+  let Some(app) = setup(true).await else { return };
+  let (payer, first_payee, second_payee) =
+    (funded(&app).await, funded(&app).await, funded(&app).await);
+  let (_, book) = payer.issue(&app, random_bytes(16), 1, 100, 1).await;
+  let stub = &book.unwrap().stubs[0];
+  let spend_a = payer.spend(stub, &first_payee.account_id, 40, 1);
+  let spend_b = payer.spend(stub, &second_payee.account_id, 50, 1);
+  assert_eq!(
+    app.deposit(stub, &spend_a).await.status,
+    RedeemStatus::Paid as i32
+  );
+  tokio::time::sleep(std::time::Duration::from_millis(2_100)).await;
+  let conflict = app.deposit(stub, &spend_b).await;
+  assert_eq!(conflict.status, RedeemStatus::RejectedConflict as i32);
+  assert_eq!(
+    conflict.proof.unwrap().conflict_kind,
+    ConflictKind::SameCheque as i32
+  );
+  assert_eq!(app.balance(&second_payee.account_id).await, (10_000, 0));
+  let frozen: bool = sqlx::query_scalar("SELECT frozen FROM accounts WHERE account_id = $1")
+    .bind(&payer.account_id)
+    .fetch_one(&app.pool)
+    .await
+    .unwrap();
+  assert!(frozen);
+}
+
+#[tokio::test]
 async fn triggers_stop_even_the_owner_and_invariants_hold() {
   let Some(app) = setup(true).await else { return };
   let payer = funded(&app).await;
@@ -411,8 +484,7 @@ async fn stale_clock_cannot_redeem_a_released_cheque() {
     stub: Some(stub.clone()),
     spend: Some(payer.spend(stub, &payee.account_id, 10, 1)),
   };
-  // Pre-lock clock far in the past: only the post-lock check can refuse.
-  let response = meshpay_server::ledger::deposit::deposit(&app.state, request, 0).await;
+  let response = meshpay_server::ledger::deposit::deposit(&app.state, request).await;
   let response = response.ok().unwrap();
   assert_eq!(response.status, RedeemStatus::RejectedExpired as i32);
   let after = (
