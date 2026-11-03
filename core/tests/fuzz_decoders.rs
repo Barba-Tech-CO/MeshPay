@@ -4,6 +4,8 @@
 //! AckReceipt (PayerEngine::on_ack), ChequeSpendBody (derive_tx_id and the receiver).
 //! Not in core: RedeemRequest, RecoveryCert (server-side only).
 //! Case count: env PROPTEST_CASES (default 64).
+mod support;
+
 use meshpay_core::dtn_buffer::DtnEngine;
 use meshpay_core::dtn_ingest_outcome::IngestOutcome;
 use meshpay_core::dtn_snapshot::{snapshot_signing_message, verify_snapshot};
@@ -200,8 +202,15 @@ fn pair() -> Pair {
     signed_at_unix: NOW,
     ..Default::default()
   };
-  let propose = payer.propose(&body.encode_to_vec(), 1, ACCOUNT).unwrap();
-  let ack = receiver.on_propose(&propose).unwrap();
+  let propose = payer
+    .propose(
+      &body.encode_to_vec(),
+      1,
+      ACCOUNT,
+      &support::stub_for(&body.encode_to_vec()),
+    )
+    .unwrap();
+  let ack = receiver.on_propose(&propose, &support::context()).unwrap();
   Pair {
     directory,
     payer,
@@ -221,6 +230,7 @@ fn tx_propose_never_panics_and_rejection_stores_nothing() {
   let signed = prop::collection::vec(any::<u8>(), 0..300).prop_map(move |body| {
     let payer_signature = sign(&payer_key, &spend_signing_message(&body));
     TxPropose {
+      stub: Some(support::stub_message_for(&body)),
       spend: Some(ChequeSpend {
         body,
         payer_signature,
@@ -232,7 +242,7 @@ fn tx_propose_never_panics_and_rejection_stores_nothing() {
     .run(&prop_oneof![input(pair.propose.clone()), signed], |bytes| {
       let before = count(&path, sql);
       let _ = derive_tx_id(1, &bytes);
-      match pair.receiver.on_propose(&bytes) {
+      match pair.receiver.on_propose(&bytes, &support::context()) {
         Ok(_) => prop_assert!(count(&path, sql) <= before + 1),
         Err(_) => prop_assert_eq!(count(&path, sql), before),
       }

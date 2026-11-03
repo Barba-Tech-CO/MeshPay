@@ -43,6 +43,7 @@ fn expected_body() -> ChequeSpendBody {
 fn propose() -> TxPropose {
   let body = body_with_tx_id(&from_hex(DART_SPEND_BODY_HEX), &tx_id()).unwrap();
   TxPropose {
+    stub: None,
     spend: Some(ChequeSpend {
       body,
       payer_signature: vec![0xee; 4],

@@ -3,6 +3,8 @@
 pub mod ack_receipt;
 pub mod cheque_spend;
 pub mod cheque_spend_body;
+pub mod cheque_stub;
+pub mod cheque_stub_body;
 pub mod revocation_snapshot;
 pub mod sync_envelope;
 pub mod tx_propose;
