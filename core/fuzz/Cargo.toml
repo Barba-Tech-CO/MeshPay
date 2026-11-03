@@ -1,0 +1,42 @@
+# cargo-fuzz harness (needs nightly): `cd core && cargo +nightly fuzz run <target>`; targets:
+# sync_envelope, revocation_snapshot, tx_propose, ack_receipt. Not part of the core build or CI.
+[package]
+name = "meshpay_core_fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+meshpay_core = { path = ".." }
+prost = "0.14.4"
+tempfile = "3.27.0"
+
+[workspace]
+
+[[bin]]
+name = "sync_envelope"
+path = "fuzz_targets/sync_envelope.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "revocation_snapshot"
+path = "fuzz_targets/revocation_snapshot.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "tx_propose"
+path = "fuzz_targets/tx_propose.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "ack_receipt"
+path = "fuzz_targets/ack_receipt.rs"
+test = false
+doc = false
