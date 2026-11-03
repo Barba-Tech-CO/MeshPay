@@ -1,3 +1,6 @@
+# Attestation roots (server/secrets/attestation_roots.pem) and revoked serials
+# (attestation_revoked.txt) are operator supplied and start empty: no real attestation is accepted
+# until the operator fills them.
 # LAB stack. The signing key is a Docker secret (file server/secrets/server_signing_key.hex,
 # 64 hex chars, gitignored). `migrate` runs once with the Postgres admin role, which creates the
 # non-superuser schema owner `meshpay_owner` (owns the schema and SECURITY DEFINER functions).
@@ -41,6 +44,8 @@ services:
         condition: service_completed_successfully
     secrets:
       - server_signing_key
+      - attestation_roots
+      - attestation_revoked
     environment:
       DATABASE_URL: postgres://meshpay_app:${RUNTIME_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
       LISTEN_ADDR: 0.0.0.0:${SERVER_PORT}
@@ -54,6 +59,11 @@ services:
       REQUEST_TIMEOUT_SECONDS: ${REQUEST_TIMEOUT_SECONDS}
       MAX_CONCURRENT_REQUESTS: ${MAX_CONCURRENT_REQUESTS}
       REGISTER_LIMIT_PER_MINUTE: ${REGISTER_LIMIT_PER_MINUTE}
+      CHALLENGE_LIMIT_PER_MINUTE: ${CHALLENGE_LIMIT_PER_MINUTE}
+      ATTESTATION_ROOTS_PEM_FILE: ${ATTESTATION_ROOTS_PEM_FILE}
+      ATTESTATION_REVOCATION_FILE: ${ATTESTATION_REVOCATION_FILE}
+      ATTESTATION_CHALLENGE_TTL_SECONDS: ${ATTESTATION_CHALLENGE_TTL_SECONDS}
+      ALLOW_TEE_ISSUANCE: ${ALLOW_TEE_ISSUANCE}
     ports:
       - "127.0.0.1:${SERVER_HOST_PORT}:${SERVER_PORT}"
     healthcheck:
@@ -65,6 +75,10 @@ services:
 secrets:
   server_signing_key:
     file: ./server/secrets/server_signing_key.hex
+  attestation_roots:
+    file: ./server/secrets/attestation_roots.pem
+  attestation_revoked:
+    file: ./server/secrets/attestation_revoked.txt
 
 volumes:
   pgdata:

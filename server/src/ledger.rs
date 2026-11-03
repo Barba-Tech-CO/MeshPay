@@ -1,5 +1,6 @@
 pub mod audit;
 pub mod balance;
+pub mod challenge;
 pub mod deposit;
 pub mod equivocation;
 pub mod expiry;

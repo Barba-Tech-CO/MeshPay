@@ -1,6 +1,7 @@
 //! Hand-written prost mirror of the PRD section 10 messages, plus lab request/response bodies.
 pub mod attestation_level;
 pub mod balance_response;
+pub mod challenge_response;
 pub mod cheque_spend;
 pub mod cheque_spend_body;
 pub mod cheque_stub;

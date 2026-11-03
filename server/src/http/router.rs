@@ -1,4 +1,4 @@
-use crate::http::{accounts, chequebooks, deposits, health, server_key};
+use crate::http::{accounts, challenge, chequebooks, deposits, health, server_key};
 use crate::state::AppState;
 use axum::Router;
 use axum::error_handling::HandleErrorLayer;
@@ -14,6 +14,7 @@ pub fn router(state: AppState) -> Router {
   Router::new()
     .route("/healthz", get(health::health))
     .route("/v1/server-key", get(server_key::server_key))
+    .route("/v1/challenge", get(challenge::get_challenge))
     .route("/v1/accounts", post(accounts::register))
     .route(
       "/v1/accounts/{account_id}/balance",

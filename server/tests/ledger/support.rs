@@ -76,6 +76,11 @@ pub async fn setup_with(tweak: impl FnOnce(&mut AppConfig)) -> Option<TestApp> {
     request_timeout_seconds: 10,
     max_concurrent_requests: 64,
     register_limit_per_minute: 10_000,
+    challenge_limit_per_minute: 10_000,
+    attestation_roots_pem_file: "/dev/null".to_owned(),
+    attestation_revocation_file: "/dev/null".to_owned(),
+    attestation_challenge_ttl_seconds: 60,
+    allow_tee_issuance: false,
   };
   tweak(&mut config);
   pool::migrate(&owner_url, 1_000_000_000_000, 10_000, &runtime_password)
@@ -111,6 +116,12 @@ impl TestApp {
     let status = response.status();
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
     (status, bytes.to_vec())
+  }
+
+  /// Full response, for tests that look at headers.
+  pub async fn get_response(&self, path: &str) -> axum::response::Response {
+    let request = Request::builder().uri(path).body(Body::empty()).unwrap();
+    self.router.clone().oneshot(request).await.unwrap()
   }
 
   pub async fn get_signed(
@@ -172,6 +183,22 @@ impl Client {
     Self { key, account_id }
   }
 
+  pub fn verifying_key(&self) -> p256::ecdsa::VerifyingKey {
+    *self.key.verifying_key()
+  }
+
+  /// Registration with an attestation chain; the level claim is deliberately LAB_SOFTWARE.
+  pub fn attested_request(&self, chain: Vec<Vec<u8>>, challenge: Vec<u8>) -> RegisterRequest {
+    let public_key = compressed_public_key(&self.key);
+    RegisterRequest {
+      signature: sign(&self.key, &register_message(&public_key)),
+      public_key,
+      attestation_level: AttestationLevel::LabSoftware as i32,
+      attestation_chain: chain,
+      challenge,
+    }
+  }
+
   pub async fn register(&self, app: &TestApp) -> (StatusCode, Option<RegisterResponse>) {
     let public_key = compressed_public_key(&self.key);
     let signature = sign(&self.key, &register_message(&public_key));
@@ -179,6 +206,8 @@ impl Client {
       public_key,
       signature,
       attestation_level: AttestationLevel::LabSoftware as i32,
+      attestation_chain: Vec::new(),
+      challenge: Vec::new(),
     };
     let (status, bytes) = app
       .call("POST", "/v1/accounts", request.encode_to_vec())

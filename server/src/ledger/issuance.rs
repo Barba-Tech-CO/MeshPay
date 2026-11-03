@@ -1,3 +1,4 @@
+use crate::attestation::account_level::AccountLevel;
 use crate::crypto::p256_keys::{sign, verify};
 use crate::crypto::signing_messages::{issue_message, stub_seal_message};
 use crate::error::ApiError;
@@ -5,7 +6,6 @@ use crate::ledger::stored::decode_stored;
 use crate::ledger::units::{to_i64, to_u64};
 use crate::ledger::{audit, balance, expiry};
 use crate::state::AppState;
-use crate::wire::attestation_level::AttestationLevel;
 use crate::wire::cheque_stub::ChequeStub;
 use crate::wire::cheque_stub_body::ChequeStubBody;
 use crate::wire::issue_request::IssueRequest;
@@ -54,12 +54,13 @@ pub async fn issue(
 
   // Unknown account and bad signature are indistinguishable to the caller.
   let denied = || ApiError::Forbidden("request not authorized".to_owned());
-  let account: Option<(Vec<u8>, i64)> =
-    sqlx::query_as("SELECT public_key, epoch FROM accounts WHERE account_id = $1")
-      .bind(&body.account_id)
-      .fetch_optional(&state.pool)
-      .await?;
-  let (public_key, epoch) = account.ok_or_else(denied)?;
+  let account: Option<(Vec<u8>, i64, AccountLevel)> = sqlx::query_as(
+    "SELECT public_key, epoch, attestation_level FROM accounts WHERE account_id = $1",
+  )
+  .bind(&body.account_id)
+  .fetch_optional(&state.pool)
+  .await?;
+  let (public_key, epoch, level) = account.ok_or_else(denied)?;
   verify(
     &public_key,
     &issue_message(&request.body),
@@ -67,6 +68,12 @@ pub async fn issue(
   )
   .map_err(|_| denied())?;
 
+  // PRD 4.5, after the signature check so only the account owner learns this.
+  if !level.may_issue(config.allow_tee_issuance, config.lab_mode) {
+    return Err(ApiError::Forbidden(
+      "attestation level cannot issue chequebooks".to_owned(),
+    ));
+  }
   let mut tx = state.pool.begin().await?;
   let (frozen,): (bool,) =
     sqlx::query_as("SELECT frozen FROM accounts WHERE account_id = $1 FOR UPDATE")
@@ -145,7 +152,7 @@ pub async fn issue(
       signer_pubkey: public_key.clone(),
       max_amount_units: body.max_amount_units,
       expires_at_unix,
-      attestation_level: AttestationLevel::LabSoftware as i32,
+      attestation_level: level.wire_level() as i32,
       single_use_key: false,
       server_key_id: state.key_id(),
     };
