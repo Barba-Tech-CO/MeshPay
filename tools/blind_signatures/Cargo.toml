@@ -1,0 +1,21 @@
+[package]
+name = "blind_signatures"
+version = "0.1.0"
+publish = false
+edition = "2024"
+
+[workspace]
+
+[features]
+# Exposes the blinding secret. Test-only: never enable in a real build.
+leak-blinding-secret = []
+
+[profile.test]
+opt-level = 3
+
+[dependencies]
+blind-rsa-signatures = "0.18.0"
+
+[dev-dependencies]
+rand_chacha = "0.10.0"
+blind_signatures = { path = ".", features = ["leak-blinding-secret"] }

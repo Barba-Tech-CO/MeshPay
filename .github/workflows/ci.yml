@@ -43,6 +43,45 @@ jobs:
         working-directory: core
         run: cargo test --locked
 
+  # Study prototypes: fmt, clippy and tests only; excluded from cargo audit/deny gates (blind_signatures uses an rc crate with a known RUSTSEC advisory).
+  tools:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        crate:
+          - tools/risk_sim
+          - tools/social_recovery
+          - tools/blind_signatures
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Detect Rust project
+        id: detect
+        run: |
+          if [ -f "${{ matrix.crate }}/Cargo.toml" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+        if: steps.detect.outputs.present == 'true'
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+          cache-workspaces: ${{ matrix.crate }}
+      - name: Check Rust formatting
+        if: steps.detect.outputs.present == 'true'
+        working-directory: ${{ matrix.crate }}
+        run: cargo fmt --check
+      - name: Run Rust Clippy
+        if: steps.detect.outputs.present == 'true'
+        working-directory: ${{ matrix.crate }}
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Run Rust tests
+        if: steps.detect.outputs.present == 'true'
+        working-directory: ${{ matrix.crate }}
+        run: cargo test --locked
+
   flutter:
     runs-on: ubuntu-latest
     steps:
