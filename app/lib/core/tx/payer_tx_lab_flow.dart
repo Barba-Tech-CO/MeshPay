@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import '../noise/noise_l2cap_session.dart';
+import '../server/messages/cheque_spend_body.dart';
 import 'lab_frame_helper.dart';
 import 'lab_public_key_helper.dart';
 import 'payer_tx_engine_service.dart';
@@ -56,13 +57,15 @@ class PayerTxLabFlow {
     final counter = await _engine.nextCounter();
     _ensureActive();
     final propose = await _engine.propose(
-      spendBody: TxWireHelper.buildSpendBody(
+      spendBody: ChequeSpendBody(
         chequeId: RandomBytesHelper.secure(_chequeIdBytes),
         payeeAccountId: payee,
         amountUnits: testAmountUnits,
+        txId: Uint8List(0),
         counter: counter,
+        prevSpendHash: Uint8List(0),
         signedAtUnix: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      ),
+      ).toBytes(),
       counter: counter,
       recipientId: payee,
     );
