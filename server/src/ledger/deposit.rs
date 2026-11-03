@@ -119,15 +119,20 @@ pub async fn deposit(
     }
   }
 
-  // Both account rows, in id order, so opposite-direction deposits cannot deadlock.
+  // Only the payer row is locked: it serialises this payer's redemptions (counter and cheque
+  // checks below). The payee is only checked to exist, so many payers can pay one payee at once
+  // (PV-NET-04). NO KEY UPDATE lets the redemptions FK take KEY SHARE on a payee that is itself
+  // paying (A->B while B->A); migration 0006 orders supply before balances for the same reason.
   let mut tx = state.pool.begin().await?;
-  let locked: Vec<(Vec<u8>,)> = sqlx::query_as(
-    "SELECT account_id FROM accounts WHERE account_id = ANY($1) ORDER BY account_id FOR UPDATE",
+  let payee_known: bool = sqlx::query_scalar(
+    "SELECT EXISTS (SELECT 1 FROM accounts WHERE account_id = $2)
+     FROM accounts WHERE account_id = $1 FOR NO KEY UPDATE",
   )
-  .bind(vec![payer.clone(), body.payee_account_id.clone()])
-  .fetch_all(&mut *tx)
+  .bind(&payer)
+  .bind(&body.payee_account_id)
+  .fetch_one(&mut *tx)
   .await?;
-  if locked.len() != 2 {
+  if !payee_known {
     return invalid("unknown payee");
   }
 

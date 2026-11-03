@@ -25,8 +25,9 @@ async fn thousand_deposits_settle_under_two_seconds() {
     payer.register(&app).await;
     let per_payer = (DEPOSITS / PAYERS) as u32;
     let (_, book) = payer.issue(&app, random_bytes(16), per_payer, 1, 600).await;
-    for stub in book.expect("issue").stubs {
-      let spend = payer.spend(&stub, &payee.account_id, 1, 1);
+    // Honest spends: one counter per cheque (a reused counter is an equivocation, PRD 4.2).
+    for (counter, stub) in (1..).zip(book.expect("issue").stubs) {
+      let spend = payer.spend(&stub, &payee.account_id, 1, counter);
       jobs.push((stub, spend));
     }
   }
@@ -54,8 +55,8 @@ async fn thousand_deposits_settle_under_two_seconds() {
     available + reserved - before_available - before_reserved,
     DEPOSITS as i64
   );
-  // PRD bound (2 s) is enforced with MESHPAY_THROUGHPUT_STRICT=1; the default is a regression guard
-  // only, because the global audit-chain lock serializes commits (see report: ~3.7 s release, ~11.7 s debug).
+  // PRD bound (2 s) is enforced with MESHPAY_THROUGHPUT_STRICT=1 (release build); the default is a
+  // regression guard only, since debug builds and shared CI hosts are slower.
   let bound = if std::env::var("MESHPAY_THROUGHPUT_STRICT").is_ok() {
     Duration::from_secs(2)
   } else {
