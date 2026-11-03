@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  verify-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require an annotated tag with a verified signature
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ref_type="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq .object.type)"
+          if [ "$ref_type" != "tag" ]; then
+            echo "::error::$TAG is a lightweight tag; releases need an annotated, signed tag"
+            exit 1
+          fi
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq .object.sha)"
+          verified="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$sha" --jq .verification.verified)"
+          if [ "$verified" != "true" ]; then
+            echo "::error::$TAG signature is not verified by GitHub (verification.verified=$verified)"
+            exit 1
+          fi
+
+  build:
+    needs: verify-tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+        with:
+          toolchain: stable
+          cache-workspaces: server
+      - name: Build server release binary
+        working-directory: server
+        run: cargo build --release --locked
+      - name: Package artifact
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          mkdir -p dist
+          tar -czf "dist/meshpay_server-$TAG-linux-x86_64.tar.gz" \
+            -C server/target/release meshpay_server
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*.tar.gz
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: meshpay_server-${{ github.ref_name }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
