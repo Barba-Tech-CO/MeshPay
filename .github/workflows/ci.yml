@@ -43,7 +43,7 @@ jobs:
         working-directory: core
         run: cargo test --locked
 
-  # Study prototypes: fmt, clippy and tests only; excluded from cargo audit/deny gates (blind_signatures uses an rc crate with a known RUSTSEC advisory).
+  # Study prototypes: fmt, clippy and tests here; cargo audit/deny run in security.yml (rust-tools-audit).
   tools:
     runs-on: ubuntu-latest
     strategy:
