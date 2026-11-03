@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import '../noise/noise_l2cap_session.dart';
 import 'lab_frame_helper.dart';
+import 'lab_public_key_helper.dart';
 import 'payer_tx_engine_service.dart';
 import 'random_bytes_helper.dart';
 import 'tx_error_code.dart';
@@ -29,7 +30,6 @@ class PayerTxLabFlow {
 
   static const int testAmountUnits = 100;
   static const String testUnit = 'TEST';
-  static const int publicKeyBytes = 33;
   static const int _chequeIdBytes = 16;
 
   final NoiseL2capSession _session;
@@ -125,7 +125,7 @@ class PayerTxLabFlow {
       await _engine.getPublicKey(),
     );
     if (reply.kind != TxLabMessageKind.helloReply ||
-        reply.payload.length != publicKeyBytes) {
+        !LabPublicKeyHelper.isValid(reply.payload)) {
       throw const TxLabException(TxErrorCode.invalidKey);
     }
     _ensureActive();

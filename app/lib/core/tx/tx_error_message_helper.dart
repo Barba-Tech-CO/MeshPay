@@ -50,6 +50,10 @@ class TxErrorMessageHelper {
       'O resumo DTN já foi trocado nesta conexão.',
     TxErrorCode.dtnRoundLimit =>
       'A troca DTN excedeu o limite de rodadas desta conexão.',
+    TxErrorCode.localKeyInconsistent =>
+      'Chave local inconsistente: a chave do Keystore e a chave salva não '
+          'conferem e já existem cheques para ela. Apague os dados do '
+          'laboratório para recomeçar.',
   };
 
   static String messageFor(Object failure) {

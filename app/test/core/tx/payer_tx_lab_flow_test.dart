@@ -109,6 +109,37 @@ void main() {
     ]);
   });
 
+  test('accepts a 65-byte Keystore key from the receiver HELLO', () async {
+    final key = <int>[4, ...List<int>.filled(64, 7)];
+    peer.onMessage = (kind, payload) async => kind == TxLabMessageKind.hello
+        ? TxLabMessageHelper.encode(TxLabMessageKind.helloReply, key)
+        : TxLabMessageHelper.encode(
+            TxLabMessageKind.ack,
+            TxWireHelper.encodeBytesField(
+              1,
+              TxWireHelper.txIdFromPropose(payload)!,
+            ),
+          );
+
+    await flow.sendCheque();
+
+    expect(flow.error, isNull);
+    expect(engine.openedPayeeKey, key);
+    expect(flow.state, TxLabState.committed);
+  });
+
+  test('rejects a 65-byte receiver key with a wrong prefix', () async {
+    peer.onMessage = (kind, payload) async => TxLabMessageHelper.encode(
+      TxLabMessageKind.helloReply,
+      List<int>.filled(65, 7),
+    );
+
+    await flow.sendCheque();
+
+    expect(flow.state, TxLabState.failed);
+    expect(engine.calls, isNot(contains('open')));
+  });
+
   test(
     'a transport failure leaves the cheque locked and reports link loss',
     () async {

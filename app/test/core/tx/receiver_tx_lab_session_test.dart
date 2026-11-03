@@ -54,6 +54,22 @@ void main() {
     expect(engine.calls, isEmpty);
   });
 
+  test('accepts a 65-byte uncompressed Keystore key', () async {
+    await handle(TxLabMessageKind.hello, <int>[4, ...List<int>.filled(64, 1)]);
+
+    expect(engine.calls, <String>['open']);
+    expect(session.error, isNull);
+  });
+
+  test('rejects keys with a wrong length or prefix', () async {
+    await handle(TxLabMessageKind.hello, List<int>.filled(65, 2));
+    expect(lastError(), TxErrorCode.invalidKey);
+
+    await handle(TxLabMessageKind.hello, <int>[4, ...List<int>.filled(32, 1)]);
+    expect(lastError(), TxErrorCode.invalidKey);
+    expect(engine.calls, isEmpty);
+  });
+
   test('close releases the engine and allows a new HELLO', () async {
     final key = List<int>.filled(33, 2);
     await handle(TxLabMessageKind.hello, key);
