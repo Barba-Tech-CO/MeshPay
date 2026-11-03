@@ -24,7 +24,20 @@ pub async fn migrate(
   let admin = connect(admin_url).await?;
   prepare_roles(&admin, runtime_db_password).await?;
   admin.close().await;
+  apply_schema(admin_url, supply_cap_units, initial_grant_units).await
+}
 
+/// Step 2 of `migrate` on the database of `admin_url`; the roles must already exist.
+pub async fn apply_schema(
+  admin_url: &str,
+  supply_cap_units: u64,
+  initial_grant_units: u64,
+) -> Result<(), sqlx::Error> {
+  let admin = connect(admin_url).await?;
+  sqlx::query("ALTER SCHEMA public OWNER TO meshpay_owner")
+    .execute(&admin)
+    .await?;
+  admin.close().await;
   let cap = supply_cap_units.to_string();
   let grant = initial_grant_units.to_string();
   let owner = PgPoolOptions::new()
@@ -76,9 +89,6 @@ async fn prepare_roles(admin: &PgPool, runtime_db_password: &str) -> Result<(), 
       .execute(&mut *tx)
       .await?;
   }
-  sqlx::query("ALTER SCHEMA public OWNER TO meshpay_owner")
-    .execute(&mut *tx)
-    .await?;
   tx.commit().await?;
   Ok(())
 }

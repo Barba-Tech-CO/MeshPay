@@ -10,6 +10,11 @@ async fn main() -> Result<(), String> {
   if std::env::args().nth(1).as_deref() == Some("migrate") {
     return run_migrate().await;
   }
+  #[cfg(feature = "lab")]
+  if std::env::args().nth(1).as_deref() == Some("lab-key-cert") {
+    let args: Vec<String> = std::env::args().skip(2).collect();
+    return meshpay_server::lab::key_cert::print_lab_key_cert(&args);
+  }
   let config = AppConfig::from_env()?;
   let db = pool::connect(&config.database_url)
     .await

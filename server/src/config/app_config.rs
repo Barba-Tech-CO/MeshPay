@@ -10,6 +10,10 @@ pub struct AppConfig {
   pub lab_mode: bool,
   /// P-256 seed of the lab server key, 32 bytes hex. Secret; read from a file (Docker secret).
   pub server_signing_key_hex: String,
+  /// Compressed P-256 public key of the offline root (hex). Public, not a secret.
+  pub server_root_public_key_hex: String,
+  /// Root-signed ISSUER `ServerKeyCert` of the signing key (protobuf, hex), read from a file.
+  pub server_key_cert_hex: String,
   /// `f`: max value per cheque.
   pub cap_cheque_units: u64,
   /// `R`: max reserve per chequebook and max pending reserve per wallet.
@@ -26,6 +30,8 @@ pub struct AppConfig {
   pub register_limit_per_minute: u32,
   /// Challenge requests per minute per process (public endpoint, separate from registration).
   pub challenge_limit_per_minute: u32,
+  /// Kill-switch snapshots per minute per process (`POST /v1/control/snapshot`).
+  pub control_limit_per_minute: u32,
   /// PEM file with the trusted attestation roots (operator supplied; Google hardware roots).
   pub attestation_roots_pem_file: String,
   /// One revoked certificate serial (hex) per line; operator supplied.
@@ -38,14 +44,15 @@ pub struct AppConfig {
 
 impl AppConfig {
   pub fn from_env() -> Result<Self, String> {
-    let key_file = required("SERVER_SIGNING_KEY_FILE")?;
-    let key = std::fs::read_to_string(&key_file)
-      .map_err(|e| format!("cannot read SERVER_SIGNING_KEY_FILE: {e}"))?;
+    let key = read_secret_file(&required("SERVER_SIGNING_KEY_FILE")?)?;
+    let cert = read_secret_file(&required("SERVER_KEY_CERT_FILE")?)?;
     let config = Self {
       database_url: required("DATABASE_URL")?,
       listen_addr: required("LISTEN_ADDR")?,
       lab_mode: parsed("LAB_MODE")?,
-      server_signing_key_hex: key.trim().to_owned(),
+      server_signing_key_hex: key,
+      server_root_public_key_hex: required("SERVER_ROOT_PUBLIC_KEY_HEX")?,
+      server_key_cert_hex: cert,
       cap_cheque_units: parsed("CAP_CHEQUE_UNITS")?,
       cap_reserve_units: parsed("CAP_RESERVE_UNITS")?,
       cheque_max_count: parsed("CHEQUE_MAX_COUNT")?,
@@ -55,6 +62,7 @@ impl AppConfig {
       max_concurrent_requests: parsed("MAX_CONCURRENT_REQUESTS")?,
       register_limit_per_minute: parsed("REGISTER_LIMIT_PER_MINUTE")?,
       challenge_limit_per_minute: parsed("CHALLENGE_LIMIT_PER_MINUTE")?,
+      control_limit_per_minute: parsed("CONTROL_LIMIT_PER_MINUTE")?,
       attestation_roots_pem_file: required("ATTESTATION_ROOTS_PEM_FILE")?,
       attestation_revocation_file: required("ATTESTATION_REVOCATION_FILE")?,
       attestation_challenge_ttl_seconds: parsed("ATTESTATION_CHALLENGE_TTL_SECONDS")?,
@@ -93,6 +101,13 @@ impl AppConfig {
     }
     Ok(())
   }
+}
+
+/// Trimmed contents of a secret file (Docker secret, lab seed).
+pub fn read_secret_file(path: &str) -> Result<String, String> {
+  std::fs::read_to_string(path)
+    .map(|text| text.trim().to_owned())
+    .map_err(|e| format!("cannot read {path}: {e}"))
 }
 
 pub fn required(name: &str) -> Result<String, String> {

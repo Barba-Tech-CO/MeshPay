@@ -4,6 +4,8 @@ pub mod crypto;
 pub mod db;
 pub mod error;
 pub mod http;
+#[cfg(feature = "lab")]
+pub mod lab;
 pub mod ledger;
 pub mod state;
 pub mod wire;
