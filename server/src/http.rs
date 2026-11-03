@@ -1,4 +1,5 @@
 pub mod accounts;
+pub mod challenge;
 pub mod chequebooks;
 pub mod deposits;
 pub mod health;
