@@ -3,6 +3,7 @@ pub mod challenge;
 pub mod chequebooks;
 pub mod deposits;
 pub mod health;
+pub mod kill_switch;
 pub mod proto_body;
 pub mod register_limiter;
 pub mod router;
