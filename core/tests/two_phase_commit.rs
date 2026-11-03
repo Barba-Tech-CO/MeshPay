@@ -1,3 +1,5 @@
+mod support;
+
 use meshpay_core::api::{PayerTxEngine, ReceiverTxEngine, generate_lab_signing_key};
 use meshpay_core::payer_tx_engine::PayerEngine;
 use meshpay_core::receiver_tx_engine::ReceiverEngine;
@@ -116,7 +118,9 @@ fn pv_ble_03_atomic_failure_recovery_over_200_executions() {
     let (body, payee) = spend_body(index);
 
     let payer = lab.open_payer();
-    let propose = payer.propose(&body, index + 1, &payee).expect("propose");
+    let propose = payer
+      .propose(&body, index + 1, &payee, &support::stub_for(&body))
+      .expect("propose");
     let tx_id = tx_id_of(&propose);
 
     let (committed_ack, ack_held_by_payer): (Vec<u8>, Option<Vec<u8>>) = match index % 4 {
@@ -136,16 +140,24 @@ fn pv_ble_03_atomic_failure_recovery_over_200_executions() {
           "run {index}: redelivery differs"
         );
         assert_eq!(
-          payer.propose(&body, index + 1, &payee).unwrap(),
+          payer
+            .propose(&body, index + 1, &payee, &support::stub_for(&body))
+            .unwrap(),
           propose,
           "run {index}: re-propose produced different bytes"
         );
-        let ack = lab.open_receiver().on_propose(&propose).expect("receiver");
+        let ack = lab
+          .open_receiver()
+          .on_propose(&propose, &support::context())
+          .expect("receiver");
         (ack, None)
       }
       // Point 1: sent, receiver acked, ack lost; payer crashed meanwhile.
       1 => {
-        let first_ack = lab.open_receiver().on_propose(&propose).expect("receiver");
+        let first_ack = lab
+          .open_receiver()
+          .on_propose(&propose, &support::context())
+          .expect("receiver");
         drop(payer);
         let payer = lab.open_payer();
         assert_eq!(
@@ -157,7 +169,7 @@ fn pv_ble_03_atomic_failure_recovery_over_200_executions() {
         assert_eq!(pending, vec![propose.clone()]);
         let redelivered_ack = lab
           .open_receiver()
-          .on_propose(&pending[0])
+          .on_propose(&pending[0], &support::context())
           .expect("redeliver");
         assert_eq!(
           redelivered_ack, first_ack,
@@ -167,7 +179,10 @@ fn pv_ble_03_atomic_failure_recovery_over_200_executions() {
       }
       // Point 2: payer holds the ack, crashes before persisting COMMITTED.
       2 => {
-        let ack = lab.open_receiver().on_propose(&propose).expect("receiver");
+        let ack = lab
+          .open_receiver()
+          .on_propose(&propose, &support::context())
+          .expect("receiver");
         drop(payer);
         assert_eq!(
           payer_states(&lab),
@@ -179,7 +194,9 @@ fn pv_ble_03_atomic_failure_recovery_over_200_executions() {
       // Point 3: receiver crashes after storing, before the ack exists.
       _ => {
         let receiver = lab.open_receiver();
-        receiver.store_propose(&propose).expect("store");
+        receiver
+          .store_propose(&propose, &support::context())
+          .expect("store");
         drop(receiver);
         drop(payer);
         let receiver = lab.open_receiver();
@@ -194,7 +211,9 @@ fn pv_ble_03_atomic_failure_recovery_over_200_executions() {
         let payer = lab.open_payer();
         let pending = payer.resume_pending().unwrap();
         assert_eq!(pending, vec![propose.clone()]);
-        let ack = receiver.on_propose(&pending[0]).expect("redeliver");
+        let ack = receiver
+          .on_propose(&pending[0], &support::context())
+          .expect("redeliver");
         (ack, None)
       }
     };
@@ -214,7 +233,9 @@ fn pv_ble_03_atomic_failure_recovery_over_200_executions() {
 
     // Late duplicate delivery of the same propose: same ack bytes, no second row.
     let receiver = lab.open_receiver();
-    let late_ack = receiver.on_propose(&propose).expect("late redelivery");
+    let late_ack = receiver
+      .on_propose(&propose, &support::context())
+      .expect("late redelivery");
     assert_eq!(
       late_ack, committed_ack,
       "run {index}: ack redelivery not byte-identical"
@@ -250,20 +271,36 @@ fn same_counter_with_different_content_is_refused_and_changes_nothing() {
   let lab = Lab::new();
   let payer = lab.open_payer();
   let (body, payee) = spend_body(0);
-  let first = payer.propose(&body, 1, &payee).unwrap();
+  let first = payer
+    .propose(&body, 1, &payee, &support::stub_for(&body))
+    .unwrap();
 
   let other = ChequeSpendBody {
     amount_units: 999,
     ..ChequeSpendBody::decode(body.as_slice()).unwrap()
   };
-  assert!(payer.propose(&other.encode_to_vec(), 1, &payee).is_err());
+  assert!(
+    payer
+      .propose(
+        &other.encode_to_vec(),
+        1,
+        &payee,
+        &support::stub_for(&other.encode_to_vec())
+      )
+      .is_err()
+  );
   let other_cheque = ChequeSpendBody {
     cheque_id: b"another-cheque".to_vec(),
     ..ChequeSpendBody::decode(body.as_slice()).unwrap()
   };
   assert!(
     payer
-      .propose(&other_cheque.encode_to_vec(), 1, &payee)
+      .propose(
+        &other_cheque.encode_to_vec(),
+        1,
+        &payee,
+        &support::stub_for(&other_cheque.encode_to_vec())
+      )
       .is_err()
   );
   assert_eq!(payer.resume_pending().unwrap(), vec![first]);
@@ -275,13 +312,30 @@ fn propose_rejects_mismatched_counter_recipient_and_tx_id() {
   let lab = Lab::new();
   let payer = lab.open_payer();
   let (body, payee) = spend_body(0);
-  assert!(payer.propose(&body, 2, &payee).is_err());
-  assert!(payer.propose(&body, 1, b"someone-else").is_err());
+  assert!(
+    payer
+      .propose(&body, 2, &payee, &support::stub_for(&body))
+      .is_err()
+  );
+  assert!(
+    payer
+      .propose(&body, 1, b"someone-else", &support::stub_for(&body))
+      .is_err()
+  );
   let forged = ChequeSpendBody {
     tx_id: vec![1; 32],
     ..ChequeSpendBody::decode(body.as_slice()).unwrap()
   };
-  assert!(payer.propose(&forged.encode_to_vec(), 1, &payee).is_err());
+  assert!(
+    payer
+      .propose(
+        &forged.encode_to_vec(),
+        1,
+        &payee,
+        &support::stub_for(&forged.encode_to_vec())
+      )
+      .is_err()
+  );
   assert_eq!(payer_states(&lab).0, 0);
 }
 
@@ -291,23 +345,32 @@ fn receiver_rejects_tampered_body_bad_signature_and_conflicting_content() {
   let payer = lab.open_payer();
   let receiver = lab.open_receiver();
   let (body, payee) = spend_body(0);
-  let propose = payer.propose(&body, 1, &payee).unwrap();
-  let spend = TxPropose::decode(propose.as_slice())
-    .unwrap()
-    .spend
+  let propose = payer
+    .propose(&body, 1, &payee, &support::stub_for(&body))
     .unwrap();
+  let decoded = TxPropose::decode(propose.as_slice()).unwrap();
+  let (stub, spend) = (decoded.stub.unwrap(), decoded.spend.unwrap());
 
-  let rewrap = |spend: ChequeSpend| TxPropose { spend: Some(spend) }.encode_to_vec();
+  let rewrap = |spend: ChequeSpend| {
+    TxPropose {
+      stub: Some(stub.clone()),
+      spend: Some(spend),
+    }
+    .encode_to_vec()
+  };
 
   // Body changed after signing: signature check fails.
   let mut tampered = ChequeSpendBody::decode(spend.body.as_slice()).unwrap();
   tampered.amount_units += 1;
   assert!(
     receiver
-      .on_propose(&rewrap(ChequeSpend {
-        body: tampered.encode_to_vec(),
-        ..spend.clone()
-      }))
+      .on_propose(
+        &rewrap(ChequeSpend {
+          body: tampered.encode_to_vec(),
+          ..spend.clone()
+        }),
+        &support::context()
+      )
       .is_err()
   );
 
@@ -319,20 +382,26 @@ fn receiver_rejects_tampered_body_bad_signature_and_conflicting_content() {
   let signature = meshpay_core::tx_keys::sign(&payer_key, &spend_signing_message(&wrong_body));
   assert!(
     receiver
-      .on_propose(&rewrap(ChequeSpend {
-        body: wrong_body,
-        payer_signature: signature
-      }))
+      .on_propose(
+        &rewrap(ChequeSpend {
+          body: wrong_body,
+          payer_signature: signature
+        }),
+        &support::context()
+      )
       .is_err()
   );
 
   // Garbage signature.
   assert!(
     receiver
-      .on_propose(&rewrap(ChequeSpend {
-        payer_signature: vec![0; 64],
-        ..spend.clone()
-      }))
+      .on_propose(
+        &rewrap(ChequeSpend {
+          payer_signature: vec![0; 64],
+          ..spend.clone()
+        }),
+        &support::context()
+      )
       .is_err()
   );
   assert_eq!(
@@ -344,7 +413,7 @@ fn receiver_rejects_tampered_body_bad_signature_and_conflicting_content() {
   );
 
   // Valid propose stored, then the same cheque with different content (new counter) is refused.
-  receiver.on_propose(&propose).unwrap();
+  receiver.on_propose(&propose, &support::context()).unwrap();
   let (conflict_body, _) = spend_body(0);
   let conflict = ChequeSpendBody {
     counter: 2,
@@ -352,9 +421,18 @@ fn receiver_rejects_tampered_body_bad_signature_and_conflicting_content() {
   };
   let conflict_propose = lab
     .open_payer_with_fresh_db("conflict")
-    .propose(&conflict.encode_to_vec(), 2, &payee)
+    .propose(
+      &conflict.encode_to_vec(),
+      2,
+      &payee,
+      &support::stub_for(&conflict.encode_to_vec()),
+    )
     .unwrap();
-  assert!(receiver.on_propose(&conflict_propose).is_err());
+  assert!(
+    receiver
+      .on_propose(&conflict_propose, &support::context())
+      .is_err()
+  );
   assert_eq!(
     query_i64(
       &lab.receiver_path(),
@@ -383,8 +461,16 @@ fn payer_rejects_forged_and_foreign_acks() {
   let payer = lab.open_payer();
   let receiver = lab.open_receiver();
   let (body, payee) = spend_body(0);
-  let propose = payer.propose(&body, 1, &payee).unwrap();
-  let ack = AckReceipt::decode(receiver.on_propose(&propose).unwrap().as_slice()).unwrap();
+  let propose = payer
+    .propose(&body, 1, &payee, &support::stub_for(&body))
+    .unwrap();
+  let ack = AckReceipt::decode(
+    receiver
+      .on_propose(&propose, &support::context())
+      .unwrap()
+      .as_slice(),
+  )
+  .unwrap();
 
   let bad_signature = AckReceipt {
     payee_signature: vec![0; 64],
@@ -441,12 +527,18 @@ fn dart_facing_api_runs_the_full_exchange() {
     payee_key.seed,
     payer_key.public_key,
     OWN_ACCOUNT.to_vec(),
+    support::snapshot_public_key(),
+    support::E,
   )
   .unwrap();
+  receiver
+    .install_snapshot(support::signed_snapshot(support::T_SRV), 0, None)
+    .unwrap();
   let (body, payee) = spend_body(3);
-  let propose = payer.propose(body, 4, payee).unwrap();
-  let ack = receiver.on_propose(propose.clone()).unwrap();
-  assert_eq!(receiver.on_propose(propose).unwrap(), ack);
+  let stub = support::stub_for(&body);
+  let propose = payer.propose(body, 4, payee, stub).unwrap();
+  let ack = receiver.on_propose(propose.clone(), 0, None).unwrap();
+  assert_eq!(receiver.on_propose(propose, 0, None).unwrap(), ack);
   payer.on_ack(ack).unwrap();
   assert!(payer.resume_pending().unwrap().is_empty());
 }
@@ -480,6 +572,7 @@ fn sign_spend(body: &[u8], message: &[u8]) -> Vec<u8> {
 
 fn wrap(body: Vec<u8>, signature: Vec<u8>) -> Vec<u8> {
   TxPropose {
+    stub: Some(support::stub_message_for(&body)),
     spend: Some(ChequeSpend {
       body,
       payer_signature: signature,
@@ -501,9 +594,14 @@ fn receiver_rejects_cheque_addressed_to_another_account() {
     ..Default::default()
   };
   let propose = payer
-    .propose(&body.encode_to_vec(), 1, b"someone-else")
+    .propose(
+      &body.encode_to_vec(),
+      1,
+      b"someone-else",
+      &support::stub_for(&body.encode_to_vec()),
+    )
     .unwrap();
-  assert!(receiver.on_propose(&propose).is_err());
+  assert!(receiver.on_propose(&propose, &support::context()).is_err());
   assert_eq!(
     query_i64(
       &lab.receiver_path(),
@@ -524,11 +622,15 @@ fn spend_signature_is_domain_separated() {
   let bare = sign_spend(&body_bytes, &body_bytes);
   assert!(
     receiver
-      .on_propose(&wrap(body_bytes.clone(), bare))
+      .on_propose(&wrap(body_bytes.clone(), bare), &support::context())
       .is_err()
   );
   let prefixed = sign_spend(&body_bytes, &spend_signing_message(&body_bytes));
-  assert!(receiver.on_propose(&wrap(body_bytes, prefixed)).is_ok());
+  assert!(
+    receiver
+      .on_propose(&wrap(body_bytes, prefixed), &support::context())
+      .is_ok()
+  );
 }
 
 #[test]
@@ -549,8 +651,15 @@ fn tx_id_hashes_the_carried_bytes_not_a_reencode() {
   // Receiver accepts a body whose tx_id field sits last (as the payer writes it).
   let lab = Lab::new();
   let payer = lab.open_payer();
-  let propose = payer.propose(&body, 5, OWN_ACCOUNT).unwrap();
-  assert!(lab.open_receiver().on_propose(&propose).is_ok());
+  let propose = payer
+    .propose(&body, 5, OWN_ACCOUNT, &support::stub_for(&body))
+    .unwrap();
+  assert!(
+    lab
+      .open_receiver()
+      .on_propose(&propose, &support::context())
+      .is_ok()
+  );
 }
 
 #[test]
@@ -566,11 +675,20 @@ fn oversized_propose_is_refused_on_both_sides() {
   };
   assert!(
     payer
-      .propose(&huge.encode_to_vec(), 1, OWN_ACCOUNT)
+      .propose(
+        &huge.encode_to_vec(),
+        1,
+        OWN_ACCOUNT,
+        &support::stub_for(&huge.encode_to_vec())
+      )
       .is_err()
   );
   assert_eq!(payer_states(&lab).0, 0);
-  assert!(receiver.on_propose(&vec![0u8; 4097]).is_err());
+  assert!(
+    receiver
+      .on_propose(&vec![0u8; 4097], &support::context())
+      .is_err()
+  );
 }
 
 #[test]
@@ -578,7 +696,9 @@ fn locked_cheques_expire_only_after_the_window_and_redeliver_until_then() {
   let lab = Lab::new();
   let payer = lab.open_payer();
   let (body, payee) = spend_body(0); // signed_at_unix = 1_700_000_000
-  let propose = payer.propose(&body, 1, &payee).unwrap();
+  let propose = payer
+    .propose(&body, 1, &payee, &support::stub_for(&body))
+    .unwrap();
   assert_eq!(payer.expire_locked(1_700_000_000 + 99, 100).unwrap(), 0);
   assert_eq!(payer.resume_pending().unwrap(), vec![propose.clone()]);
   assert_eq!(payer.expire_locked(1_700_000_000 + 100, 100).unwrap(), 1);
@@ -592,8 +712,13 @@ fn locked_cheques_expire_only_after_the_window_and_redeliver_until_then() {
   );
   // Committed cheques are never expired.
   let (body2, payee2) = spend_body(1);
-  let propose2 = payer.propose(&body2, 2, &payee2).unwrap();
-  let ack = lab.open_receiver().on_propose(&propose2).unwrap();
+  let propose2 = payer
+    .propose(&body2, 2, &payee2, &support::stub_for(&body2))
+    .unwrap();
+  let ack = lab
+    .open_receiver()
+    .on_propose(&propose2, &support::context())
+    .unwrap();
   payer.on_ack(&ack).unwrap();
   assert_eq!(payer.expire_locked(u64::MAX, 0).unwrap(), 0);
   assert_eq!(payer_states(&lab), (2, 0, 1));
@@ -620,7 +745,9 @@ fn child_propose_loop() {
   println!("ready");
   for counter in start..start + 5000 {
     let (body, payee) = spend_body(counter - 1);
-    payer.propose(&body, counter, &payee).unwrap();
+    payer
+      .propose(&body, counter, &payee, &support::stub_for(&body))
+      .unwrap();
   }
 }
 
@@ -704,7 +831,9 @@ fn sigkill_during_propose_never_leaves_a_half_written_or_duplicated_cheque() {
       let counter = offset as u64 + 1;
       let (body, payee) = spend_body(counter - 1);
       assert_eq!(
-        &payer.propose(&body, counter, &payee).unwrap(),
+        &payer
+          .propose(&body, counter, &payee, &support::stub_for(&body))
+          .unwrap(),
         stored,
         "run {run}: bytes changed"
       );

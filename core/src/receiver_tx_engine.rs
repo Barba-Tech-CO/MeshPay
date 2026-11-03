@@ -1,5 +1,8 @@
+use crate::acceptance_context::AcceptanceContext;
+use crate::cheque_acceptance::ChequeAcceptance;
 use crate::payer_tx_engine::MAX_PROPOSE_BYTES;
 use crate::prepared_ack::PreparedAck;
+use crate::receiver_clock_row::ReceiverClockRow;
 use crate::tx_database::{open_database, sql_error, to_sql_integer};
 use crate::tx_hashing::{ack_signing_message, derive_tx_id, spend_hash, spend_signing_message};
 use crate::tx_keys::{
@@ -7,6 +10,7 @@ use crate::tx_keys::{
 };
 use crate::tx_wire::ack_receipt::AckReceipt;
 use crate::tx_wire::cheque_spend_body::ChequeSpendBody;
+use crate::tx_wire::cheque_stub_body::ChequeStubBody;
 use crate::tx_wire::tx_propose::TxPropose;
 use p256::ecdsa::{SigningKey, VerifyingKey};
 use prost::Message;
@@ -27,7 +31,20 @@ CREATE TABLE IF NOT EXISTS incoming_cheques (
   state TEXT NOT NULL CHECK (state IN ('RECEIVED', 'ACKED')),
   ack_bytes BLOB,
   CHECK ((state = 'ACKED') = (ack_bytes IS NOT NULL))
+) STRICT;
+CREATE TABLE IF NOT EXISTS receiver_clock (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  t_srv_unix INTEGER NOT NULL,
+  anchor_unix INTEGER NOT NULL,
+  monotonic_nanos INTEGER NOT NULL,
+  boot_count INTEGER,
+  max_now_unix INTEGER NOT NULL,
+  rebooted INTEGER NOT NULL CHECK (rebooted IN (0, 1))
 ) STRICT;"
+}
+
+fn from_sql_integer(value: i64) -> Result<u64, String> {
+  u64::try_from(value).map_err(|_| "database: negative integer".to_owned())
 }
 
 /// Receiver side of the two-phase commit. Software mode (LAB) signs the `AckReceipt` with a
@@ -99,21 +116,32 @@ impl ReceiverEngine {
   }
 
   /// Verifies, durably stores and acknowledges. Same propose twice returns the same ack.
-  pub fn on_propose(&self, propose_bytes: &[u8]) -> Result<Vec<u8>, String> {
+  pub fn on_propose(
+    &self,
+    propose_bytes: &[u8],
+    context: &AcceptanceContext,
+  ) -> Result<Vec<u8>, String> {
     if self.signing_key.is_none() {
       return Err("external signer: use store_propose, prepare_ack and finish_ack".to_owned());
     }
-    let tx_id = self.store_propose(propose_bytes)?;
+    let tx_id = self.store_propose(propose_bytes, context)?;
     self.issue_ack(&tx_id)
   }
 
-  /// Step 1 of `on_propose`: row lands as RECEIVED. Returns the tx_id.
-  pub fn store_propose(&self, propose_bytes: &[u8]) -> Result<Vec<u8>, String> {
+  /// Step 1 of `on_propose`: row lands as RECEIVED. Returns the tx_id. A new cheque must pass
+  /// `ChequeAcceptance::check` on the stub `expires_at_unix`; redelivery of a stored one does not
+  /// re-check, so the same propose keeps returning the same tx_id.
+  pub fn store_propose(
+    &self,
+    propose_bytes: &[u8],
+    context: &AcceptanceContext,
+  ) -> Result<Vec<u8>, String> {
     if propose_bytes.len() > MAX_PROPOSE_BYTES {
       return Err("propose exceeds the size cap".to_owned());
     }
     let propose = TxPropose::decode(propose_bytes).map_err(|e| format!("propose: {e}"))?;
     let spend = propose.spend.ok_or("propose without spend")?;
+    let stub = propose.stub.ok_or("propose without stub")?;
     verify(
       &self.payer_key,
       &spend_signing_message(&spend.body),
@@ -126,6 +154,13 @@ impl ReceiverEngine {
     let tx_id = derive_tx_id(body.counter, &spend.body)?;
     if body.tx_id != tx_id {
       return Err("tx_id does not match counter and content".to_owned());
+    }
+    // ponytail: stub server_signature (ISSUER ServerKeyCert) not verified yet; core has no
+    // ServerKeyCert verifier. Until then expiry is only as trustworthy as the pinned payer key.
+    let stub_body =
+      ChequeStubBody::decode(stub.body.as_slice()).map_err(|e| format!("stub body: {e}"))?;
+    if stub_body.cheque_id != body.cheque_id {
+      return Err("stub names a different cheque".to_owned());
     }
     let hash = spend_hash(&spend.body);
     let counter_sql = to_sql_integer(body.counter)?;
@@ -150,6 +185,12 @@ impl ReceiverEngine {
         Err("tx_id or cheque already stored with different content".to_owned())
       };
     }
+    ChequeAcceptance::check(
+      stub_body.expires_at_unix,
+      context.now,
+      context.snapshot_issued_at_unix,
+      context.expiry_secs,
+    )?;
     transaction
       .execute(
         "INSERT INTO incoming_cheques
@@ -237,6 +278,63 @@ impl ReceiverEngine {
       .map_err(sql_error)?;
     transaction.commit().map_err(sql_error)?;
     Ok(ack)
+  }
+
+  /// Persisted protocol-clock state, `None` until the first verified snapshot.
+  pub fn load_clock(&self) -> Result<Option<ReceiverClockRow>, String> {
+    let row = self
+      .connection()?
+      .query_row(
+        "SELECT t_srv_unix, anchor_unix, monotonic_nanos, boot_count, max_now_unix, rebooted FROM receiver_clock WHERE id = 1",
+        [],
+        |row| {
+          Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, i64>(1)?,
+            row.get::<_, i64>(2)?,
+            row.get::<_, Option<i64>>(3)?,
+            row.get::<_, i64>(4)?,
+            row.get::<_, bool>(5)?,
+          ))
+        },
+      )
+      .optional()
+      .map_err(sql_error)?;
+    row
+      .map(|(t_srv, anchor, monotonic, boot, max_now, rebooted)| {
+        Ok(ReceiverClockRow {
+          t_srv_unix: from_sql_integer(t_srv)?,
+          anchor_unix: from_sql_integer(anchor)?,
+          monotonic_nanos: from_sql_integer(monotonic)?,
+          boot_count: boot.map(from_sql_integer).transpose()?,
+          max_now_unix: from_sql_integer(max_now)?,
+          rebooted,
+        })
+      })
+      .transpose()
+  }
+
+  /// Conditional write: never replaces a row with a stale one (older `t_srv`, or same `t_srv`
+  /// with a lower `max_now` or a cleared reboot flag), so two engines on one file cannot lose
+  /// each other's updates.
+  pub fn save_clock(&self, clock: &ReceiverClockRow) -> Result<(), String> {
+    self
+      .connection()?
+      .execute(
+        "INSERT INTO receiver_clock (id, t_srv_unix, anchor_unix, monotonic_nanos, boot_count, max_now_unix, rebooted) VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT (id) DO UPDATE SET t_srv_unix = excluded.t_srv_unix, anchor_unix = excluded.anchor_unix, monotonic_nanos = excluded.monotonic_nanos, boot_count = excluded.boot_count, max_now_unix = excluded.max_now_unix, rebooted = excluded.rebooted
+         WHERE excluded.t_srv_unix > receiver_clock.t_srv_unix OR (excluded.t_srv_unix = receiver_clock.t_srv_unix AND excluded.max_now_unix >= receiver_clock.max_now_unix AND excluded.rebooted >= receiver_clock.rebooted)",
+        params![
+          to_sql_integer(clock.t_srv_unix)?,
+          to_sql_integer(clock.anchor_unix)?,
+          to_sql_integer(clock.monotonic_nanos)?,
+          clock.boot_count.map(to_sql_integer).transpose()?,
+          to_sql_integer(clock.max_now_unix)?,
+          clock.rebooted,
+        ],
+      )
+      .map_err(sql_error)?;
+    Ok(())
   }
 
   fn connection(&self) -> Result<MutexGuard<'_, Connection>, String> {
