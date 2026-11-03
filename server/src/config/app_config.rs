@@ -24,6 +24,16 @@ pub struct AppConfig {
   pub max_concurrent_requests: usize,
   /// Registrations per minute per process. Registration grants free units: lab faucet only.
   pub register_limit_per_minute: u32,
+  /// Challenge requests per minute per process (public endpoint, separate from registration).
+  pub challenge_limit_per_minute: u32,
+  /// PEM file with the trusted attestation roots (operator supplied; Google hardware roots).
+  pub attestation_roots_pem_file: String,
+  /// One revoked certificate serial (hex) per line; operator supplied.
+  pub attestation_revocation_file: String,
+  /// Registration challenge lifetime, 1..=60 seconds.
+  pub attestation_challenge_ttl_seconds: u64,
+  /// PRD 4.5: only StrongBox issues chequebooks unless the operator explicitly allows TEE.
+  pub allow_tee_issuance: bool,
 }
 
 impl AppConfig {
@@ -44,6 +54,11 @@ impl AppConfig {
       request_timeout_seconds: parsed("REQUEST_TIMEOUT_SECONDS")?,
       max_concurrent_requests: parsed("MAX_CONCURRENT_REQUESTS")?,
       register_limit_per_minute: parsed("REGISTER_LIMIT_PER_MINUTE")?,
+      challenge_limit_per_minute: parsed("CHALLENGE_LIMIT_PER_MINUTE")?,
+      attestation_roots_pem_file: required("ATTESTATION_ROOTS_PEM_FILE")?,
+      attestation_revocation_file: required("ATTESTATION_REVOCATION_FILE")?,
+      attestation_challenge_ttl_seconds: parsed("ATTESTATION_CHALLENGE_TTL_SECONDS")?,
+      allow_tee_issuance: parsed("ALLOW_TEE_ISSUANCE")?,
     };
     config.validate()?;
     ensure_hex_url_password("DATABASE_URL", &config.database_url)?;
@@ -72,6 +87,9 @@ impl AppConfig {
       return Err(
         "REQUEST_TIMEOUT_SECONDS and MAX_CONCURRENT_REQUESTS must be positive".to_owned(),
       );
+    }
+    if !(1..=60).contains(&self.attestation_challenge_ttl_seconds) {
+      return Err("ATTESTATION_CHALLENGE_TTL_SECONDS must be 1..=60".to_owned());
     }
     Ok(())
   }
