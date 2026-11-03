@@ -161,7 +161,7 @@ class PaymentKeyManager(context: Context) {
     }
     val generator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore")
     generator.initialize(builder.build())
-    return generator.generateKeyPair()
+    return StrongBoxGuard.generate(requireStrongBox) { generator.generateKeyPair() }
   }
 
   private fun ensureFree(name: String) {
