@@ -7,9 +7,12 @@ environment:
   sdk: ^3.13.7
 
 dependencies:
+  crypto: ^3.0.8
   design_system:
     path: ../packages/design_system
 
+  dio: ^5.11.1
+  fixnum: ^1.1.1
   flutter:
     sdk: flutter
 
@@ -24,6 +27,7 @@ dependencies:
   mobile_scanner: ^7.5.0
   path_provider: ^2.1.6
   permission_handler: ^13.0.2
+  protobuf: ^6.1.0
   qr_flutter: ^4.1.0
 
 dev_dependencies:
