@@ -1,6 +1,7 @@
 use chacha20poly1305::{ChaCha20Poly1305, Key, KeyInit, Nonce, aead::Aead};
 use meshpay_core::dtn_buffer::{
   BUFFER_CAP_BYTES, DtnEngine, MAX_AGE_SECS, MAX_ENVELOPE_BYTES, MAX_PER_CONNECTION,
+  MAX_PER_PAIR_BYTES,
 };
 use meshpay_core::dtn_ingest_outcome::IngestOutcome;
 use meshpay_core::dtn_peer_session::DtnPeerSession;
@@ -740,4 +741,87 @@ fn snapshot_is_stored_canonically_without_unknown_fields() {
   );
   // Same version again (the clean copy of the stored one) is a stale duplicate, not an error of state.
   assert!(node.engine.ingest_snapshot(&signed_snapshot(9, 1)).is_err());
+}
+
+/// PV-SEC-06: 20 MB of envelopes from one origin pair occupy at most 1 MB; invalid ones are not
+/// stored; another pair is still accepted.
+#[test]
+fn one_origin_pair_holds_at_most_one_megabyte() {
+  let node = Node::with_limits(64 * 1024 * 1024, UNLIMITED_RATE);
+  let pair = b"payer|payee".to_vec();
+  let mut offered = 0usize;
+  let mut counter = 0u64;
+  while offered < 20 * 1024 * 1024 {
+    let session = DtnPeerSession::with_origin_pair(Arc::clone(&node.engine), pair.clone());
+    for _ in 0..MAX_PER_CONNECTION {
+      let bytes = envelope(payload(counter), NOW, 4);
+      counter += 1;
+      offered += bytes.len();
+      session.ingest(&bytes, NOW).unwrap();
+    }
+  }
+  let invalid = DtnPeerSession::with_origin_pair(Arc::clone(&node.engine), b"x|y".to_vec());
+  let mut forged = SyncEnvelope::new(payload(u64::MAX), NOW, 4, 0);
+  forged.envelope_id = vec![0; 32];
+  assert_eq!(
+    invalid.ingest(&forged.encode_to_vec(), NOW).unwrap(),
+    IngestOutcome::IdMismatch
+  );
+  let connection = open_database(&node.path, &DB_KEY, "").unwrap();
+  let held: i64 = connection
+    .query_row(
+      "SELECT COALESCE(SUM(size_bytes), 0) FROM dtn_envelopes WHERE origin_pair = ?1",
+      [Sha256::digest(&pair).to_vec()],
+      |row| row.get(0),
+    )
+    .unwrap();
+  assert!(held > 0 && held <= MAX_PER_PAIR_BYTES, "held {held}");
+  let other = DtnPeerSession::with_origin_pair(Arc::clone(&node.engine), b"other".to_vec());
+  assert_eq!(
+    other
+      .ingest(&envelope(payload(u64::MAX - 1), NOW, 4), NOW)
+      .unwrap(),
+    IngestOutcome::Stored
+  );
+}
+
+#[test]
+fn database_created_before_origin_pair_is_migrated_on_open() {
+  let directory = tempfile::tempdir().unwrap();
+  let path = directory.path().join("dtn.db");
+  let old_schema = "
+CREATE TABLE dtn_envelopes (
+  envelope_id BLOB PRIMARY KEY CHECK (length(envelope_id) = 32),
+  created_at_unix INTEGER NOT NULL CHECK (created_at_unix >= 0),
+  received_at_unix INTEGER NOT NULL CHECK (received_at_unix >= 0),
+  ttl_hops INTEGER NOT NULL CHECK (ttl_hops BETWEEN 0 AND 4),
+  known_revocation_version INTEGER NOT NULL CHECK (known_revocation_version >= 0),
+  encrypted_server_batch BLOB NOT NULL CHECK (length(encrypted_server_batch) > 0),
+  size_bytes INTEGER NOT NULL CHECK (size_bytes BETWEEN 1 AND 5120)
+) STRICT;";
+  drop(open_database(&path, &DB_KEY, old_schema).unwrap());
+  let engine = DtnEngine::open(&path, &DB_KEY, &snapshot_public_key(), UNLIMITED_RATE).unwrap();
+  let session = DtnPeerSession::with_origin_pair(Arc::new(engine), b"a|b".to_vec());
+  assert_eq!(
+    session.ingest(&envelope(payload(1), NOW, 4), NOW).unwrap(),
+    IngestOutcome::Stored
+  );
+}
+
+#[test]
+fn huge_origin_pair_key_does_not_bloat_the_row() {
+  let node = Node::new();
+  let huge = vec![7u8; 1024 * 1024];
+  let session = DtnPeerSession::with_origin_pair(Arc::clone(&node.engine), huge);
+  assert_eq!(
+    session.ingest(&envelope(payload(2), NOW, 4), NOW).unwrap(),
+    IngestOutcome::Stored
+  );
+  let connection = open_database(&node.path, &DB_KEY, "").unwrap();
+  let length: i64 = connection
+    .query_row("SELECT length(origin_pair) FROM dtn_envelopes", [], |row| {
+      row.get(0)
+    })
+    .unwrap();
+  assert_eq!(length, 32);
 }
