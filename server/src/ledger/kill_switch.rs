@@ -60,6 +60,24 @@ pub async fn apply(
   Ok(())
 }
 
+/// Cheap, DB-free check used to let a genuine root-signed snapshot past the junk rate limit.
+pub fn is_root_signed(state: &AppState, request: &KillSwitchRequest) -> bool {
+  let Ok(snapshot) = RevocationSnapshot::decode(request.snapshot.as_slice()) else {
+    return false;
+  };
+  let unsigned = RevocationSnapshot {
+    server_signature: Vec::new(),
+    ..snapshot.clone()
+  };
+  snapshot.signer_key_id == key_id(&state.root_public_key)
+    && verify(
+      &state.root_public_key,
+      &snapshot_signing_message(&unsigned.encode_to_vec()),
+      &snapshot.server_signature,
+    )
+    .is_ok()
+}
+
 /// Root signature, or a current, unrevoked SNAPSHOT key certified by the root (cert stored).
 async fn verify_signer(
   connection: &mut PgConnection,

@@ -788,6 +788,21 @@ async fn control_snapshot_is_rate_limited() {
 }
 
 #[tokio::test]
+async fn root_signed_snapshot_passes_an_exhausted_control_limit() {
+  let Some(app) = setup_with(|config| config.control_limit_per_minute = 1).await else {
+    return;
+  };
+  for _ in 0..2 {
+    app.call("POST", "/v1/control/snapshot", vec![0xff]).await;
+  }
+  let body = kill_switch(&app.root_key, None, unix_now(), Vec::new(), false);
+  assert_eq!(
+    app.call("POST", "/v1/control/snapshot", body).await.0,
+    StatusCode::NO_CONTENT
+  );
+}
+
+#[tokio::test]
 async fn runtime_role_does_not_own_the_kill_switch_tables() {
   let Some(app) = setup(true).await else { return };
   let tables = [
