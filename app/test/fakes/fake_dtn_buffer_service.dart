@@ -19,6 +19,7 @@ class FakeDtnBufferService implements DtnBufferService {
   Uint8List? snapshot;
   int? snapshotVersion;
   final List<FakeDtnSessionService> sessions = <FakeDtnSessionService>[];
+  final List<Uint8List> originPairs = <Uint8List>[];
 
   /// True when [envelope] is new.
   bool store(Uint8List envelope) {
@@ -48,7 +49,10 @@ class FakeDtnBufferService implements DtnBufferService {
   }
 
   @override
-  Future<DtnSessionService> openSession() async {
+  Future<DtnSessionService> openSession({
+    required Uint8List originPair,
+  }) async {
+    originPairs.add(originPair);
     final session = FakeDtnSessionService(this, sessionBudget);
     sessions.add(session);
     return session;

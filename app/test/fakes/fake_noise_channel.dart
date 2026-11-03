@@ -6,16 +6,33 @@ import 'package:meshpay/core/noise/noise_channel.dart';
 /// (48/48/64), and the handshake only succeeds when both sides agree on the
 /// responder public key and the prologue.
 class FakeNoiseChannel implements NoiseChannel {
-  FakeNoiseChannel({required this.isInitiator, required this.binding});
+  FakeNoiseChannel({
+    required this.isInitiator,
+    required this.binding,
+    Uint8List? localStaticKey,
+    Uint8List? remoteStaticKey,
+  }) : localStaticKey = localStaticKey ?? _defaultKey(isInitiator, binding),
+       remoteStaticKey = remoteStaticKey ?? _defaultKey(!isInitiator, binding);
+
+  static Uint8List _defaultKey(bool initiator, int binding) =>
+      Uint8List.fromList(<int>[initiator ? 1 : 2, binding & 0xff]);
 
   static const int tagBytes = 16;
 
   final bool isInitiator;
   final int binding;
+  final Uint8List localStaticKey;
+  final Uint8List remoteStaticKey;
   int _step = 0;
 
   @override
   bool get isFinished => _step == 3;
+
+  @override
+  Uint8List get peerPairKey => Uint8List.fromList(<int>[
+    ...(isInitiator ? localStaticKey : remoteStaticKey),
+    ...(isInitiator ? remoteStaticKey : localStaticKey),
+  ]);
 
   Uint8List _message(int length) {
     final message = Uint8List(length);

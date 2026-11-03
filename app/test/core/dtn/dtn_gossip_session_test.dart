@@ -7,6 +7,26 @@ import 'package:meshpay/core/tx/lab_frame_helper.dart';
 import 'package:meshpay/core/tx/tx_error_code.dart';
 
 import '../../fakes/fake_dtn_buffer_service.dart';
+import '../../fakes/fake_noise_channel.dart';
+
+final Uint8List initiatorStatic = Uint8List.fromList(
+  List<int>.generate(32, (index) => index + 1),
+);
+final Uint8List responderStatic = Uint8List.fromList(
+  List<int>.generate(32, (index) => 100 + index),
+);
+final Uint8List pairKey = FakeNoiseChannel(
+  isInitiator: true,
+  binding: 1,
+  localStaticKey: initiatorStatic,
+  remoteStaticKey: responderStatic,
+).peerPairKey;
+final Uint8List responderPairKey = FakeNoiseChannel(
+  isInitiator: false,
+  binding: 1,
+  localStaticKey: responderStatic,
+  remoteStaticKey: initiatorStatic,
+).peerPairKey;
 
 void main() {
   late FakeDtnBufferService payerBuffer;
@@ -23,6 +43,7 @@ void main() {
     await receiver.handle(
       LabFrameHelper.decode(plaintext).payload,
       (frame) async => reply = frame,
+      responderPairKey,
     );
     return reply;
   }
@@ -35,6 +56,26 @@ void main() {
     receiver = DtnGossipSession(receiverBuffer, () {})..startConnection();
   });
 
+  test('both ends derive the pair key as initiator || responder', () {
+    final expected = <int>[...initiatorStatic, ...responderStatic];
+
+    expect(pairKey, expected);
+    expect(responderPairKey, expected);
+  });
+
+  test('both sides open their engine session with the link pair key', () async {
+    await payerBuffer.addTestEnvelope(Uint8List(8));
+
+    await payer.sync(exchange, pairKey);
+
+    final expected = <int>[...initiatorStatic, ...responderStatic];
+    expect(payerBuffer.originPairs, <Uint8List>[Uint8List.fromList(expected)]);
+    expect(
+      receiverBuffer.originPairs,
+      <Uint8List>[Uint8List.fromList(expected)],
+    );
+  });
+
   test('both sides converge and report their counts', () async {
     await payerBuffer.addTestEnvelope(Uint8List(8));
     await payerBuffer.addTestEnvelope(Uint8List(8));
@@ -42,7 +83,7 @@ void main() {
     await receiverBuffer.addTestEnvelope(Uint8List(8));
     await receiverBuffer.addTestEnvelope(Uint8List(8));
 
-    final linkLost = await payer.sync(exchange);
+    final linkLost = await payer.sync(exchange, pairKey);
 
     expect(linkLost, isFalse);
     expect(payer.error, isNull);
@@ -58,11 +99,11 @@ void main() {
 
   test('envelopes the peer already holds are not sent again', () async {
     await payerBuffer.addTestEnvelope(Uint8List(8));
-    await payer.sync(exchange);
+    await payer.sync(exchange, pairKey);
     payer.startConnection();
     receiver.startConnection();
 
-    await payer.sync(exchange);
+    await payer.sync(exchange, pairKey);
 
     expect(payer.stats.sent, 1);
     expect(receiver.stats.sent, 0);
@@ -72,12 +113,12 @@ void main() {
 
   test('an envelope that arrives anyway counts as a duplicate', () async {
     await payerBuffer.addTestEnvelope(Uint8List(8));
-    await payer.sync(exchange);
+    await payer.sync(exchange, pairKey);
     payer.startConnection();
     receiver.startConnection();
     payerBuffer.ignorePeerSummary = true;
 
-    await payer.sync(exchange);
+    await payer.sync(exchange, pairKey);
 
     expect(payer.stats.sent, 2);
     expect(receiver.stats.duplicates, 1);
@@ -91,7 +132,7 @@ void main() {
       await payerBuffer.addTestEnvelope(Uint8List(8));
     }
 
-    await payer.sync(exchange);
+    await payer.sync(exchange, pairKey);
 
     expect(receiver.stats.received, 2);
     expect(receiver.stats.rejected, 1);
@@ -107,7 +148,7 @@ void main() {
       ..snapshot = Uint8List.fromList(<int>[3, 1])
       ..snapshotVersion = 3;
 
-    await payer.sync(exchange);
+    await payer.sync(exchange, pairKey);
 
     expect(payer.stats.snapshotVersion, 3);
     expect(payerBuffer.snapshotVersion, 3);
@@ -117,7 +158,7 @@ void main() {
   test('a lost link is reported so the caller can tear down', () async {
     failExchange = true;
 
-    final linkLost = await payer.sync(exchange);
+    final linkLost = await payer.sync(exchange, pairKey);
 
     expect(linkLost, isTrue);
     expect(payer.error, contains('link foi interrompido'));
@@ -128,6 +169,7 @@ void main() {
     await receiver.handle(
       Uint8List.fromList(<int>[1, 9]),
       (frame) async => reply = frame,
+      pairKey,
     );
 
     expect(LabFrameHelper.decode(reply).type, LabFrameType.error);
@@ -150,7 +192,7 @@ void main() {
       ..snapshot = snapshot
       ..snapshotVersion = 3;
 
-    await payer.sync(exchange);
+    await payer.sync(exchange, pairKey);
 
     expect(payer.stats.snapshotsRefused, 1);
     expect(receiver.stats.snapshotsRefused, 1);
@@ -158,13 +200,13 @@ void main() {
   });
 
   test('a second sync on the same connection does not send', () async {
-    await payer.sync(exchange);
+    await payer.sync(exchange, pairKey);
     var sent = 0;
 
     await payer.sync((plaintext) {
       sent++;
       return exchange(plaintext);
-    });
+    }, pairKey);
 
     expect(sent, 0);
     expect(payer.error, contains('já sincronizou'));
@@ -178,9 +220,9 @@ void main() {
     Uint8List? reply;
     Future<void> send(Uint8List frame) async => reply = frame;
 
-    await receiver.handle(summary.sublist(1), send);
+    await receiver.handle(summary.sublist(1), send, pairKey);
     expect(LabFrameHelper.decode(reply!).type, LabFrameType.dtn);
-    await receiver.handle(summary.sublist(1), send);
+    await receiver.handle(summary.sublist(1), send, pairKey);
 
     final frame = LabFrameHelper.decode(reply!);
     expect(frame.type, LabFrameType.error);
@@ -196,6 +238,7 @@ void main() {
     await receiver.handle(
       DtnMessageHelper.encode(DtnMessageKind.summary, const <int>[]).sublist(1),
       send,
+      pairKey,
     );
     final empty = DtnMessageHelper.encode(
       DtnMessageKind.envelope,
@@ -203,10 +246,10 @@ void main() {
     ).sublist(1);
 
     for (var round = 0; round < DtnGossipSession.maximumRounds; round++) {
-      await receiver.handle(empty, send);
+      await receiver.handle(empty, send, pairKey);
       expect(LabFrameHelper.decode(reply!).type, LabFrameType.dtn);
     }
-    await receiver.handle(empty, send);
+    await receiver.handle(empty, send, pairKey);
 
     final frame = LabFrameHelper.decode(reply!);
     expect(frame.type, LabFrameType.error);
@@ -228,7 +271,7 @@ void main() {
       return DtnMessageHelper.encode(kind, body);
     }
 
-    await payer.sync(neverDrains);
+    await payer.sync(neverDrains, pairKey);
 
     expect(payer.stats.cutSyncs, 1);
     expect(payer.error, contains('limite de rodadas'));
@@ -240,7 +283,7 @@ void main() {
       await payerBuffer.addTestEnvelope(Uint8List(8));
     }
 
-    await payer.sync(exchange);
+    await payer.sync(exchange, pairKey);
 
     expect(payer.stats.sent, 20);
     expect(receiverBuffer.held, hasLength(20));

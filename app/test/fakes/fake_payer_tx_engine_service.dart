@@ -15,6 +15,8 @@ class FakePayerTxEngineService implements PayerTxEngineService {
   int lastCounter = 0;
   Uint8List? openedPayeeKey;
   Object? proposeError;
+  final List<Uint8List> stubs = <Uint8List>[];
+  final List<Uint8List> spendBodies = <Uint8List>[];
   Object? ackError;
 
   @override
@@ -40,8 +42,11 @@ class FakePayerTxEngineService implements PayerTxEngineService {
     required Uint8List spendBody,
     required int counter,
     required Uint8List recipientId,
+    required Uint8List stub,
   }) async {
     calls.add('propose');
+    stubs.add(stub);
+    spendBodies.add(spendBody);
     if (proposeError case final error?) {
       throw error;
     }
