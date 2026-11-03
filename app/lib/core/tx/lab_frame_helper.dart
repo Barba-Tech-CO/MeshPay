@@ -7,7 +7,8 @@ import 'tx_error_code.dart';
 enum LabFrameType {
   echo(1),
   tx(2),
-  error(3);
+  error(3),
+  dtn(4);
 
   const LabFrameType(this.wire);
 

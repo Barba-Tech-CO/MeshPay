@@ -10,6 +10,7 @@ import 'package:meshpay_native/l2cap_closed_event.dart';
 import 'package:meshpay_native/l2cap_data_event.dart';
 import 'package:meshpay_native/l2cap_opened_event.dart';
 
+import '../../../../fakes/fake_dtn_buffer_service.dart';
 import '../../../../fakes/fake_native_lab_service.dart';
 import '../../../../fakes/fake_noise_channel.dart';
 import '../../../../fakes/fake_noise_service.dart';
@@ -25,6 +26,7 @@ void main() {
       FakePermissionService(),
       FakeNoiseService(),
       FakeReceiverTxEngineService(),
+      FakeDtnBufferService(),
     );
 
     await viewModel.start();
@@ -56,6 +58,7 @@ void main() {
       FakePermissionService(),
       FakeNoiseService(),
       FakeReceiverTxEngineService(),
+      FakeDtnBufferService(),
     );
 
     viewModel.handleNativeEvent(
@@ -83,6 +86,7 @@ void main() {
       FakePermissionService(),
       FakeNoiseService(),
       FakeReceiverTxEngineService(),
+      FakeDtnBufferService(),
     );
 
     await viewModel.start();
@@ -104,6 +108,7 @@ void main() {
         FakePermissionService()..granted = false,
         FakeNoiseService(),
         FakeReceiverTxEngineService(),
+        FakeDtnBufferService(),
       );
 
       await viewModel.start();
@@ -123,6 +128,7 @@ void main() {
       FakePermissionService(),
       noise,
       FakeReceiverTxEngineService(),
+      FakeDtnBufferService(),
     );
     final keys = <String>{};
 

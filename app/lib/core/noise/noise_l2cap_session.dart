@@ -38,6 +38,9 @@ class NoiseL2capSession {
 
   bool get isEstablished => _noise.isFinished;
 
+  /// Handshake done and the channel still open.
+  bool get isUsable => isEstablished && !isClosed;
+
   /// Buffers raw stream bytes; throws [FormatException] on an invalid frame.
   void addData(Uint8List chunk) => _reader.add(chunk);
 

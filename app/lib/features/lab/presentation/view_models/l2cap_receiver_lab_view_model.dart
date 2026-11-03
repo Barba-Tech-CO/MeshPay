@@ -9,16 +9,17 @@ import 'package:meshpay_native/native_event.dart';
 
 import '../../../../core/ble/native_lab_service.dart';
 import '../../../../core/ble/permission_service.dart';
+import '../../../../core/dtn/dtn_buffer_service.dart';
+import '../../../../core/dtn/dtn_gossip_stats.dart';
 import '../../../../core/noise/hex_helper.dart';
 import '../../../../core/noise/noise_handshake_status.dart';
 import '../../../../core/noise/noise_l2cap_session.dart';
 import '../../../../core/noise/noise_prologue_helper.dart';
 import '../../../../core/noise/noise_service.dart';
-import '../../../../core/tx/lab_frame_helper.dart';
 import '../../../../core/tx/receiver_tx_engine_service.dart';
-import '../../../../core/tx/receiver_tx_lab_session.dart';
 import '../../../../core/tx/tx_lab_state.dart';
 import '../helpers/bluetooth_lab_helper.dart';
+import '../helpers/l2cap_receiver_frame_handler.dart';
 import '../helpers/l2cap_receiver_radio.dart';
 import '../helpers/lab_error_message_helper.dart';
 
@@ -32,17 +33,20 @@ class L2capReceiverLabViewModel extends ChangeNotifier {
     this._permissionService,
     this._noiseService,
     this._receiverTx,
+    this._dtn,
   ) {
     _eventsSubscription = _nativeService.events.listen(
       handleNativeEvent,
       onError: handleNativeStreamError,
     );
+    unawaited(_frames.gossip.refreshHeld().catchError(handleNativeStreamError));
   }
 
   final NativeLabService _nativeService;
   final PermissionService _permissionService;
   final NoiseService _noiseService;
   final ReceiverTxEngineService _receiverTx;
+  final DtnBufferService _dtn;
   late final StreamSubscription<NativeEvent> _eventsSubscription;
   NoiseL2capSession? _session;
   int? _serverChannelId;
@@ -52,20 +56,24 @@ class L2capReceiverLabViewModel extends ChangeNotifier {
   String? sessionIdHex;
   int? psm;
   String? keyHex;
-  int receivedMessageCount = 0;
   bool isBusy = false;
   String? error;
   late final L2capReceiverRadio _radio = L2capReceiverRadio(_nativeService);
   bool _isDisposed = false;
 
-  late final ReceiverTxLabSession _tx = ReceiverTxLabSession(
+  late final L2capReceiverFrameHandler _frames = L2capReceiverFrameHandler(
     _receiverTx,
+    _dtn,
     _notifyIfActive,
   );
 
-  TxLabState get txState => _tx.state;
+  int get receivedMessageCount => _frames.receivedMessageCount;
 
-  String? get txIdHex => _tx.txIdHex;
+  TxLabState get txState => _frames.tx.state;
+
+  DtnGossipStats get dtnStats => _frames.gossip.stats;
+
+  String? get txIdHex => _frames.tx.txIdHex;
 
   bool get hasActiveOperations => _radio.isActive || _serverChannelId != null;
 
@@ -98,7 +106,7 @@ class L2capReceiverLabViewModel extends ChangeNotifier {
     }
     isBusy = true;
     error = null;
-    _tx.reset();
+    _frames.tx.reset();
     _notifyIfActive();
 
     if (!await _hasBluetoothPermissions()) {
@@ -216,6 +224,7 @@ class L2capReceiverLabViewModel extends ChangeNotifier {
       unawaited(_closeChannel(channelId));
       return;
     }
+    _frames.gossip.startConnection();
     try {
       _session = NoiseL2capSession(
         nativeService: _nativeService,
@@ -243,7 +252,7 @@ class L2capReceiverLabViewModel extends ChangeNotifier {
     if (session != null && session.channelId == channelId) {
       final wasInProgress = session.status == NoiseHandshakeStatus.inProgress;
       session.onRemoteClosed();
-      unawaited(_tx.close());
+      unawaited(_frames.tx.close());
       if (wasInProgress) {
         unawaited(_endCharge());
       }
@@ -266,7 +275,9 @@ class L2capReceiverLabViewModel extends ChangeNotifier {
             await _endCharge();
           }
         } else {
-          await _handleFrame(session, body);
+          if (await _frames.handle(session, body) case final frameError?) {
+            error = frameError;
+          }
         }
         if (session.isClosed) {
           break;
@@ -283,23 +294,6 @@ class L2capReceiverLabViewModel extends ChangeNotifier {
       await _failSession(session, duringHandshake: duringHandshake);
     }
     _notifyIfActive();
-  }
-
-  Future<void> _handleFrame(NoiseL2capSession session, Uint8List body) async {
-    final plaintext = await session.decrypt(body);
-    final frame = LabFrameHelper.decode(plaintext);
-    switch (frame.type) {
-      case LabFrameType.echo:
-        await session.sendEncrypted(plaintext);
-        receivedMessageCount++;
-      case LabFrameType.tx:
-        await _tx.handle(frame.payload, session.sendEncrypted);
-        if (_tx.error case final txError?) {
-          error = txError;
-        }
-      case LabFrameType.error:
-        throw const FormatException('Quadro de erro inesperado.');
-    }
   }
 
   Future<void> _failSession(
@@ -338,7 +332,7 @@ class L2capReceiverLabViewModel extends ChangeNotifier {
     }
     final failures = <Object>[];
     await _radio.stop(failures);
-    await _tx.close();
+    await _frames.tx.close();
     _clearCharge();
     status = _statusForActiveChannels();
     if (failures.isNotEmpty) {
@@ -389,7 +383,7 @@ class L2capReceiverLabViewModel extends ChangeNotifier {
       else if (channelId != null)
         _nativeService.closeL2cap(channelId: channelId),
     ];
-    cleanup.add(_tx.close());
+    cleanup.add(_frames.tx.close());
     _clearCharge();
     if (cleanup.isNotEmpty) {
       unawaited(

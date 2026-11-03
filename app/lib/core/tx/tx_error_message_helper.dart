@@ -46,6 +46,10 @@ class TxErrorMessageHelper {
     TxErrorCode.tooLarge => 'A proposta excede o tamanho máximo.',
     TxErrorCode.notCommittable => 'O cheque não pode mais ser confirmado.',
     TxErrorCode.internal => 'Falha interna na transação.',
+    TxErrorCode.dtnSummaryRepeated =>
+      'O resumo DTN já foi trocado nesta conexão.',
+    TxErrorCode.dtnRoundLimit =>
+      'A troca DTN excedeu o limite de rodadas desta conexão.',
   };
 
   static String messageFor(Object failure) {

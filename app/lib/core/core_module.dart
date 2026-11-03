@@ -7,6 +7,8 @@ import 'ble/permission_handler_service.dart';
 import 'ble/permission_service.dart';
 import 'clock/clock_log_repository.dart';
 import 'clock/json_lines_clock_log_repository.dart';
+import 'dtn/dtn_buffer_service.dart';
+import 'dtn/meshpay_core_dtn_buffer_service.dart';
 import 'noise/meshpay_core_noise_service.dart';
 import 'noise/noise_service.dart';
 import 'storage/app_support_directory_service.dart';
@@ -32,6 +34,7 @@ final coreModule = createModule(
       ..addSingleton<ReceiverTxEngineService>(
         MeshpayCoreReceiverTxEngineService.new,
       )
+      ..addSingleton<DtnBufferService>(MeshpayCoreDtnBufferService.new)
       ..addSingleton<ClockLogRepository>(JsonLinesClockLogRepository.new);
   },
 );

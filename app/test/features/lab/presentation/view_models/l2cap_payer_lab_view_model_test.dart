@@ -7,6 +7,7 @@ import 'package:meshpay/features/lab/presentation/helpers/lab_error_message_help
 import 'package:meshpay/features/lab/presentation/view_models/l2cap_payer_lab_view_model.dart';
 import 'package:meshpay_native/scan_result_event.dart';
 
+import '../../../../fakes/fake_dtn_buffer_service.dart';
 import '../../../../fakes/fake_native_lab_service.dart';
 import '../../../../fakes/fake_noise_service.dart';
 import '../../../../fakes/fake_payer_tx_engine_service.dart';
@@ -18,6 +19,7 @@ void main() {
   late FakeNativeLabService native;
   late FakeNoiseService noise;
   late FakePayerTxEngineService payerTx;
+  late FakeDtnBufferService payerDtn;
   late L2capPayerLabViewModel viewModel;
 
   setUp(() {
@@ -25,11 +27,13 @@ void main() {
     native = FakeNativeLabService();
     noise = FakeNoiseService();
     payerTx = FakePayerTxEngineService();
+    payerDtn = FakeDtnBufferService();
     viewModel = L2capPayerLabViewModel(
       native,
       FakePermissionService(),
       noise,
       payerTx,
+      payerDtn,
     );
     rig.linkTo(native);
   });
@@ -361,6 +365,58 @@ void main() {
     expect(rig.viewModel.txState, TxLabState.failed);
     expect(rig.viewModel.error, 'O cheque não é para esta conta.');
     expect(viewModel.isConnected, isTrue);
+  });
+
+  test('gossip converges over the encrypted channel on both pages', () async {
+    await connectPayer(rig);
+    await viewModel.createTestEnvelope();
+    await viewModel.createTestEnvelope();
+    await rig.dtn.addTestEnvelope(Uint8List(8));
+
+    await viewModel.syncDtn();
+
+    expect(viewModel.error, isNull);
+    expect(payerDtn.held.keys.toSet(), rig.dtn.held.keys.toSet());
+    expect(payerDtn.held, hasLength(3));
+    expect(viewModel.dtnStats.held, 3);
+    expect(viewModel.dtnStats.sent, 2);
+    expect(viewModel.dtnStats.received, 1);
+    expect(rig.viewModel.dtnStats.held, 3);
+    expect(rig.viewModel.dtnStats.sent, 1);
+    expect(rig.viewModel.dtnStats.received, 2);
+  });
+
+  test(
+    'a spent session budget is shown in Portuguese on the receiver',
+    () async {
+      await connectPayer(rig);
+      rig.dtn.sessionBudget = 1;
+      await viewModel.createTestEnvelope();
+      await viewModel.createTestEnvelope();
+
+      await viewModel.syncDtn();
+
+      expect(rig.viewModel.dtnStats.rejected, 1);
+      expect(
+        rig.viewModel.error,
+        'O limite de 20 envelopes desta conexão foi atingido.',
+      );
+    },
+  );
+
+  test('a failing test envelope does not leave the view model busy', () async {
+    payerDtn.addError = StateError('disk full');
+
+    await viewModel.createTestEnvelope();
+
+    expect(viewModel.isBusy, isFalse);
+    expect(viewModel.error, isNotNull);
+  });
+
+  test('syncing without a connection asks to connect first', () async {
+    await viewModel.syncDtn();
+
+    expect(viewModel.error, 'Conecte-se ao receptor antes de sincronizar.');
   });
 
   test('a rejected ack fails the cheque with a readable error', () async {

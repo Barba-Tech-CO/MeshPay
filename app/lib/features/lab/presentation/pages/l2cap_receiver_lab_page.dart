@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../helpers/dtn_gossip_stats_label_helper.dart';
 import '../helpers/noise_handshake_label_helper.dart';
 import '../helpers/tx_lab_state_label_helper.dart';
 import '../view_models/l2cap_receiver_lab_view_model.dart';
@@ -122,6 +123,23 @@ class L2capReceiverLabPage extends StatelessWidget {
                   value: viewModel.txIdHex ?? 'Indisponível',
                   mono: true,
                 ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          SectionCardDs(
+            title: 'Gossip DTN',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final row in DtnGossipStatsLabelHelper.rowsFor(
+                  viewModel.dtnStats,
+                ))
+                  MetricRowDs(
+                    label: row.label,
+                    value: row.value,
+                    mono: true,
+                  ),
               ],
             ),
           ),

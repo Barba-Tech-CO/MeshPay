@@ -12,18 +12,21 @@ import 'package:meshpay_native/scan_result_event.dart';
 import '../../../../core/ble/native_lab_service.dart';
 import '../../../../core/ble/permission_service.dart';
 import '../../../../core/clock/percentile_helper.dart';
-import '../../../../core/noise/hex_helper.dart';
+import '../../../../core/dtn/dtn_buffer_service.dart';
+import '../../../../core/dtn/dtn_gossip_stats.dart';
+import '../../../../core/dtn/payer_dtn_lab_flow.dart';
 import '../../../../core/noise/noise_handshake_status.dart';
 import '../../../../core/noise/noise_l2cap_session.dart';
-import '../../../../core/noise/noise_prologue_helper.dart';
 import '../../../../core/noise/noise_service.dart';
-import '../../../../core/tx/lab_frame_helper.dart';
 import '../../../../core/tx/payer_tx_engine_service.dart';
 import '../../../../core/tx/payer_tx_lab_flow.dart';
 import '../../../../core/tx/tx_lab_state.dart';
 import '../helpers/bluetooth_lab_helper.dart';
+import '../helpers/l2cap_payer_echo_helper.dart';
+import '../helpers/l2cap_payer_form.dart';
 import '../helpers/l2cap_payer_input_helper.dart';
 import '../helpers/l2cap_payer_scan_session.dart';
+import '../helpers/l2cap_payer_session_opener.dart';
 import '../helpers/lab_error_message_helper.dart';
 
 class L2capPayerLabViewModel extends ChangeNotifier {
@@ -32,30 +35,28 @@ class L2capPayerLabViewModel extends ChangeNotifier {
     this._permissionService,
     this._noiseService,
     this._payerTx,
+    this._dtn,
   ) {
     _eventsSubscription = _nativeService.events.listen(
       handleNativeEvent,
       onError: handleNativeStreamError,
     );
+    unawaited(_dtnFlow.refreshHeld().catchError(handleNativeStreamError));
   }
-
-  static const int _echoBodyBytes = 25 * 1024;
-  static const int _echoRepetitions = 5;
 
   final NativeLabService _nativeService;
   final PermissionService _permissionService;
   final NoiseService _noiseService;
   final PayerTxEngineService _payerTx;
+  final DtnBufferService _dtn;
   late final StreamSubscription<NativeEvent> _eventsSubscription;
   late final L2capPayerScanSession _scan = L2capPayerScanSession(
     _nativeService,
   );
+  late final PayerDtnLabFlow _dtnFlow = PayerDtnLabFlow(_dtn, _notifyIfActive);
+  final L2capPayerForm _form = L2capPayerForm();
   NoiseL2capSession? _session;
   PayerTxLabFlow? _txFlow;
-  String sessionIdHex = '';
-  String psm = '';
-  String keyHex = '';
-  String deviceId = '';
   String? connectedDeviceId;
   List<double> echoTimingsMilliseconds = const <double>[];
   List<double> handshakeDurationsMilliseconds = const <double>[];
@@ -75,6 +76,16 @@ class L2capPayerLabViewModel extends ChangeNotifier {
   TxLabState get txState => _txFlow?.state ?? TxLabState.idle;
 
   String? get txIdHex => _txFlow?.txIdHex;
+
+  DtnGossipStats get dtnStats => _dtnFlow.stats;
+
+  String get sessionIdHex => _form.sessionIdHex;
+
+  String get psm => _form.psm;
+
+  String get keyHex => _form.keyHex;
+
+  String get deviceId => _form.deviceId;
 
   List<ScanResultEvent> get scanResults => _scan.results;
 
@@ -97,62 +108,29 @@ class L2capPayerLabViewModel extends ChangeNotifier {
   double? get handshakeP95Milliseconds =>
       PercentileHelper.percentileOrNull(handshakeDurationsMilliseconds, 0.95);
 
-  void updateSessionIdHex(String value) {
-    sessionIdHex = value;
-  }
+  void updateSessionIdHex(String value) => _form.sessionIdHex = value;
 
-  void updatePsm(String value) {
-    psm = value;
-  }
+  void updatePsm(String value) => _form.psm = value;
 
-  void updateKeyHex(String value) {
-    keyHex = value;
-  }
+  void updateKeyHex(String value) => _form.keyHex = value;
 
-  void updateDeviceId(String value) {
-    deviceId = value;
-  }
+  void updateDeviceId(String value) => _form.deviceId = value;
 
   bool handleQrPayload(String payload) {
-    error = null;
-    try {
-      final input = L2capPayerInputHelper.parseQr(payload);
-      sessionIdHex = input.sessionIdHex;
-      psm = '${input.psm}';
-      keyHex = input.keyHex;
-      _notifyIfActive();
-      return true;
-    } on FormatException catch (failure) {
-      error = 'QR inválido: ${failure.message}';
-      _notifyIfActive();
-      return false;
-    }
+    error = _form.applyQr(payload);
+    _notifyIfActive();
+    return error == null;
   }
 
   Future<void> startScan() async {
     if (isScanning || isBusy || _isDisposed) {
       return;
     }
-    final currentSessionId = sessionIdHex.trim().toLowerCase();
-    if (!L2capPayerInputHelper.isValidSessionId(currentSessionId)) {
-      error = 'Informe um ID de sessão válido em hexadecimal (8 bytes).';
-      _notifyIfActive();
-      return;
-    }
-    if (!await _hasBluetoothPermissions()) {
-      _notifyIfActive();
-      return;
-    }
-    if (_isDisposed) {
-      return;
-    }
-
-    error = null;
-    try {
-      await _scan.start(currentSessionId);
-    } on Object catch (failure) {
-      error = LabErrorMessageHelper.messageFor(failure);
-    }
+    error = await _scan.startChecked(
+      sessionIdHex,
+      _permissionService,
+      () => _isDisposed,
+    );
     _notifyIfActive();
   }
 
@@ -160,17 +138,12 @@ class L2capPayerLabViewModel extends ChangeNotifier {
     if (!isScanning || _isDisposed) {
       return;
     }
-    error = null;
-    try {
-      await _scan.stop();
-    } on Object catch (failure) {
-      error = LabErrorMessageHelper.messageFor(failure);
-    }
+    error = await _scan.stopChecked();
     _notifyIfActive();
   }
 
   void selectDevice(String selectedDeviceId) {
-    deviceId = selectedDeviceId;
+    _form.deviceId = selectedDeviceId;
     _notifyIfActive();
   }
 
@@ -178,106 +151,83 @@ class L2capPayerLabViewModel extends ChangeNotifier {
     if (isBusy || isConnected || _isDisposed) {
       return;
     }
-    final L2capPayerInput input;
+    final ({L2capPayerInput input, String deviceId}) target;
     try {
-      input = L2capPayerInputHelper.parseManual(
-        sessionIdHex: sessionIdHex,
-        psm: psm,
-        keyHex: keyHex,
-      );
+      target = _form.parseForConnect();
     } on FormatException catch (failure) {
       error = failure.message;
       _notifyIfActive();
       return;
     }
-    final targetDeviceId = deviceId.trim();
-    if (targetDeviceId.isEmpty) {
-      error = 'Informe o ID do dispositivo encontrado pelo scan.';
+    error = await BluetoothLabHelper.permissionError(_permissionService);
+    if (error != null || _isDisposed) {
       _notifyIfActive();
-      return;
-    }
-    if (!await _hasBluetoothPermissions()) {
-      _notifyIfActive();
-      return;
-    }
-    if (_isDisposed) {
       return;
     }
 
-    isBusy = true;
     error = null;
-    _notifyIfActive();
-    try {
-      final noise = _noiseService.newInitiator(
-        responderPublicKey: HexHelper.decode(input.keyHex),
-        prologue: NoisePrologueHelper.build(
-          sessionIdHex: input.sessionIdHex,
-          psm: input.psm,
-          keyHex: input.keyHex,
-        ),
-      );
-      if (isScanning) {
-        await _scan.stop();
+    await _runBusy(() async {
+      try {
+        final session = await L2capPayerSessionOpener.open(
+          nativeService: _nativeService,
+          noiseService: _noiseService,
+          input: target.input,
+          deviceId: target.deviceId,
+          beforeOpen: _scan.stopIfScanning,
+        );
+        _session = session;
+        await _txFlow?.cancel();
+        _txFlow = PayerTxLabFlow(
+          session: session,
+          engine: _payerTx,
+          onChanged: _notifyIfActive,
+        );
+        _dtnFlow.startConnection();
+        connectedDeviceId = target.deviceId;
+        await _runHandshake(session);
+      } on Object catch (failure) {
+        error = LabErrorMessageHelper.messageFor(failure);
       }
-      final channelId = await _nativeService.openL2cap(
-        deviceId: targetDeviceId,
-        psm: input.psm,
-      );
-      final session = NoiseL2capSession(
-        nativeService: _nativeService,
-        channelId: channelId,
-        noise: noise,
-      );
-      _session = session;
-      await _txFlow?.cancel();
-      _txFlow = PayerTxLabFlow(
-        session: session,
-        engine: _payerTx,
-        onChanged: _notifyIfActive,
-      );
-      connectedDeviceId = targetDeviceId;
-      await _runHandshake(session);
-    } on Object catch (failure) {
-      error = LabErrorMessageHelper.messageFor(failure);
-    } finally {
-      isBusy = false;
-      _notifyIfActive();
-    }
+    });
   }
 
-  Future<void> runEchoBenchmark() async {
-    final session = _usableSession;
-    if (session == null) {
-      error = 'Conecte-se ao receptor antes de iniciar o eco.';
-      _notifyIfActive();
-      return;
-    }
-    isBusy = true;
-    echoTimingsMilliseconds = const <double>[];
-    error = null;
-    _notifyIfActive();
-
-    final body = LabFrameHelper.encode(
-      LabFrameType.echo,
-      Uint8List(_echoBodyBytes)..fillRange(0, _echoBodyBytes, 0x5a),
-    );
-    final result = await session.measureEncryptedEchoes(
-      body: body,
-      repetitions: _echoRepetitions,
-      shouldContinue: () => !_isDisposed && isConnected,
-    );
-    echoTimingsMilliseconds = result.timingsMilliseconds;
-    if (result.failure case final failure?) {
-      error ??= LabErrorMessageHelper.messageFor(failure);
-      await _teardown(session);
-    }
-    isBusy = false;
-    _notifyIfActive();
-  }
+  Future<void> runEchoBenchmark() => _runOnLink(
+    'Conecte-se ao receptor antes de iniciar o eco.',
+    (session) async {
+      echoTimingsMilliseconds = const <double>[];
+      final result = await session.measureEncryptedEchoes(
+        body: L2capPayerEchoHelper.frame(),
+        repetitions: L2capPayerEchoHelper.repetitions,
+        shouldContinue: () => !_isDisposed && isConnected,
+      );
+      echoTimingsMilliseconds = result.timingsMilliseconds;
+      if (result.failure case final failure?) {
+        error ??= LabErrorMessageHelper.messageFor(failure);
+      }
+      return result.failure != null;
+    },
+    () => error,
+  );
 
   Future<void> sendTestCheque() => _runTx((flow) => flow.sendCheque());
 
   Future<void> resendPending() => _runTx((flow) => flow.resendPending());
+
+  Future<void> createTestEnvelope() async {
+    if (isBusy || _isDisposed) {
+      return;
+    }
+    await _runBusy(() async {
+      await _dtnFlow.createTestEnvelope();
+      error = _dtnFlow.error;
+    });
+  }
+
+  Future<void> syncDtn() => _runOnLink(
+    'Conecte-se ao receptor antes de sincronizar.',
+    (session) => _dtnFlow.sync(session.exchangeEncrypted),
+    () => _dtnFlow.error,
+  );
 
   Future<void> close() async {
     final session = _session;
@@ -304,8 +254,8 @@ class L2capPayerLabViewModel extends ChangeNotifier {
           PlatformException(code: event.code, message: event.message),
         );
         error = message;
-        final session = _session;
-        if (session != null && session.channelId == event.channelId) {
+        if (_session case final session?
+            when session.channelId == event.channelId) {
           session.failPending(StateError(message));
         }
     }
@@ -320,44 +270,60 @@ class L2capPayerLabViewModel extends ChangeNotifier {
   /// The established, open session when nothing else is running.
   NoiseL2capSession? get _usableSession {
     final session = _session;
-    final isUsable =
-        !isBusy &&
-        isConnected &&
-        !_isDisposed &&
-        session != null &&
-        !session.isClosed &&
-        session.isEstablished;
-    return isUsable ? session : null;
+    return !isBusy &&
+            isConnected &&
+            !_isDisposed &&
+            (session?.isUsable ?? false)
+        ? session
+        : null;
   }
 
-  Future<void> _runTx(Future<bool> Function(PayerTxLabFlow flow) action) async {
+  Future<void> _runTx(Future<bool> Function(PayerTxLabFlow flow) action) =>
+      _runOnLink(
+        'Conecte-se ao receptor antes de enviar o cheque.',
+        (_) => action(_txFlow ?? (throw StateError('tx flow missing'))),
+        () => _txFlow?.error,
+      );
+
+  /// Runs [action] on the usable session; it returns true when the link was
+  /// lost, which tears the session down. [errorOf] gives the error to show.
+  Future<void> _runOnLink(
+    String notConnectedMessage,
+    Future<bool> Function(NoiseL2capSession session) action,
+    String? Function() errorOf,
+  ) async {
     final session = _usableSession;
-    final flow = _txFlow;
-    if (session == null || flow == null) {
-      error = 'Conecte-se ao receptor antes de enviar o cheque.';
+    if (session == null) {
+      error = notConnectedMessage;
       _notifyIfActive();
       return;
     }
-    isBusy = true;
     error = null;
+    await _runBusy(() async {
+      final linkLost = await action(session);
+      error = errorOf();
+      if (linkLost) {
+        await _teardown(session);
+      }
+    });
+  }
+
+  Future<void> _runBusy(Future<void> Function() action) async {
+    isBusy = true;
     _notifyIfActive();
-    final linkLost = await action(flow);
-    error = flow.error;
-    if (linkLost) {
-      await _teardown(session);
+    try {
+      await action();
+    } finally {
+      isBusy = false;
+      _notifyIfActive();
     }
-    isBusy = false;
-    _notifyIfActive();
   }
 
   Future<void> _runHandshake(NoiseL2capSession session) async {
-    final stopwatch = Stopwatch()..start();
     try {
-      await session.runInitiatorHandshake();
-      stopwatch.stop();
       handshakeDurationsMilliseconds = <double>[
         ...handshakeDurationsMilliseconds,
-        stopwatch.elapsedMicroseconds / 1000,
+        await L2capPayerSessionOpener.timeHandshake(session),
       ];
       isConnected = true;
     } on Object {
@@ -401,11 +367,6 @@ class L2capPayerLabViewModel extends ChangeNotifier {
     session.onRemoteClosed();
     isConnected = false;
     connectedDeviceId = null;
-  }
-
-  Future<bool> _hasBluetoothPermissions() async {
-    error = await BluetoothLabHelper.permissionError(_permissionService);
-    return error == null;
   }
 
   void _notifyIfActive() {
