@@ -1,4 +1,6 @@
-use crate::http::{accounts, challenge, chequebooks, deposits, health, kill_switch, server_key};
+use crate::http::{
+  accounts, challenge, chequebooks, deposits, health, kill_switch, revocation_snapshot, server_key,
+};
 use crate::state::AppState;
 use axum::Router;
 use axum::error_handling::HandleErrorLayer;
@@ -14,6 +16,10 @@ pub fn router(state: AppState) -> Router {
   Router::new()
     .route("/healthz", get(health::health))
     .route("/v1/server-key", get(server_key::server_key))
+    .route(
+      "/v1/revocation-snapshot",
+      get(revocation_snapshot::get_snapshot),
+    )
     .route("/v1/challenge", get(challenge::get_challenge))
     .route("/v1/accounts", post(accounts::register))
     .route(

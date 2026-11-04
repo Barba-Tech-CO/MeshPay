@@ -6,5 +6,6 @@ pub mod health;
 pub mod kill_switch;
 pub mod proto_body;
 pub mod register_limiter;
+pub mod revocation_snapshot;
 pub mod router;
 pub mod server_key;

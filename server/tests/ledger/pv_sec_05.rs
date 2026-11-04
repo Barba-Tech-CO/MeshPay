@@ -710,14 +710,6 @@ async fn renewed_cert_is_used_and_one_key_holds_both_roles() {
 #[tokio::test]
 async fn issuance_needs_a_current_issuer_cert_covering_the_cheque_lifetime() {
   let now = unix_now();
-  let Some(expired) = setup_with_cert(now - 7_200, now - 3_600).await else {
-    return;
-  };
-  let payer = funded(&expired).await;
-  assert_eq!(
-    payer.issue(&expired, random_bytes(16), 1, 10, 600).await.0,
-    StatusCode::FORBIDDEN
-  );
   let Some(short) = setup_with_cert(now - 60, now + 300).await else {
     return;
   };

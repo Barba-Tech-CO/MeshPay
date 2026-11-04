@@ -7,6 +7,7 @@ pub mod expiry;
 pub mod issuance;
 pub mod kill_switch;
 pub mod registration;
+pub mod revocation_snapshot;
 pub mod server_keys;
 pub mod stored;
 pub mod units;
