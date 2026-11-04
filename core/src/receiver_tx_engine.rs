@@ -1,16 +1,17 @@
 use crate::acceptance_context::AcceptanceContext;
 use crate::cheque_acceptance::ChequeAcceptance;
+use crate::issuer_trust::IssuerTrust;
 use crate::payer_tx_engine::MAX_PROPOSE_BYTES;
 use crate::prepared_ack::PreparedAck;
 use crate::receiver_clock_row::ReceiverClockRow;
 use crate::tx_database::{open_database, sql_error, to_sql_integer};
 use crate::tx_hashing::{ack_signing_message, derive_tx_id, spend_hash, spend_signing_message};
 use crate::tx_keys::{
-  sign, signing_key_from_seed, verify, verify_normalized, verifying_key_from_sec1,
+  compressed_public_key_of, sign, signing_key_from_seed, verify, verify_normalized,
+  verifying_key_from_sec1,
 };
 use crate::tx_wire::ack_receipt::AckReceipt;
 use crate::tx_wire::cheque_spend_body::ChequeSpendBody;
-use crate::tx_wire::cheque_stub_body::ChequeStubBody;
 use crate::tx_wire::tx_propose::TxPropose;
 use p256::ecdsa::{SigningKey, VerifyingKey};
 use prost::Message;
@@ -55,6 +56,7 @@ pub struct ReceiverEngine {
   own_key: VerifyingKey,
   payer_key: VerifyingKey,
   own_account_id: Vec<u8>,
+  issuer: IssuerTrust,
 }
 
 impl ReceiverEngine {
@@ -64,6 +66,7 @@ impl ReceiverEngine {
     signing_seed: &[u8],
     payer_public_key: &[u8],
     own_account_id: &[u8],
+    issuer: IssuerTrust,
   ) -> Result<Self, String> {
     let signing_key = signing_key_from_seed(signing_seed)?;
     let own_key = *signing_key.verifying_key();
@@ -74,6 +77,7 @@ impl ReceiverEngine {
       own_key,
       payer_public_key,
       own_account_id,
+      issuer,
     )
   }
 
@@ -84,6 +88,7 @@ impl ReceiverEngine {
     own_public_key: &[u8],
     payer_public_key: &[u8],
     own_account_id: &[u8],
+    issuer: IssuerTrust,
   ) -> Result<Self, String> {
     Self::build(
       db_path,
@@ -92,6 +97,7 @@ impl ReceiverEngine {
       verifying_key_from_sec1(own_public_key)?,
       payer_public_key,
       own_account_id,
+      issuer,
     )
   }
 
@@ -102,6 +108,7 @@ impl ReceiverEngine {
     own_key: VerifyingKey,
     payer_public_key: &[u8],
     own_account_id: &[u8],
+    issuer: IssuerTrust,
   ) -> Result<Self, String> {
     if own_account_id.is_empty() {
       return Err("own account id must not be empty".to_owned());
@@ -112,6 +119,7 @@ impl ReceiverEngine {
       own_key,
       payer_key: verifying_key_from_sec1(payer_public_key)?,
       own_account_id: own_account_id.to_vec(),
+      issuer,
     })
   }
 
@@ -155,12 +163,17 @@ impl ReceiverEngine {
     if body.tx_id != tx_id {
       return Err("tx_id does not match counter and content".to_owned());
     }
-    // ponytail: stub server_signature (ISSUER ServerKeyCert) not verified yet; core has no
-    // ServerKeyCert verifier. Until then expiry is only as trustworthy as the pinned payer key.
-    let stub_body =
-      ChequeStubBody::decode(stub.body.as_slice()).map_err(|e| format!("stub body: {e}"))?;
+    // ponytail: revoked_server_key_ids of the snapshot not checked; the receiver keeps only the
+    // snapshot's issued_at. Persist the revoked list with the clock row when the kill switch lands.
+    let stub_body = self.issuer.verify_stub(&stub)?;
     if stub_body.cheque_id != body.cheque_id {
       return Err("stub names a different cheque".to_owned());
+    }
+    if stub_body.signer_pubkey != compressed_public_key_of(&self.payer_key) {
+      return Err("stub issued to a different payer key".to_owned());
+    }
+    if body.amount_units > stub_body.max_amount_units {
+      return Err("amount exceeds the stub maximum".to_owned());
     }
     let hash = spend_hash(&spend.body);
     let counter_sql = to_sql_integer(body.counter)?;
@@ -185,6 +198,7 @@ impl ReceiverEngine {
         Err("tx_id or cheque already stored with different content".to_owned())
       };
     }
+    self.issuer.check_current(context.now.unix)?;
     ChequeAcceptance::check(
       stub_body.expires_at_unix,
       context.now,

@@ -44,6 +44,7 @@ impl Pair {
         &PAYEE_SEED,
         &public(&PAYER_SEED),
         OWN_ACCOUNT,
+        support::issuer_trust(),
       )
       .unwrap(),
       _directory: directory,
@@ -188,6 +189,8 @@ fn bridge_receiver_refuses_until_a_verified_snapshot_anchors_the_clock() {
     OWN_ACCOUNT.to_vec(),
     support::snapshot_public_key(),
     E,
+    support::issuer_root_public_key(),
+    support::issuer_cert(),
   )
   .unwrap();
   let propose = pair.propose(1, T_SRV + 3600);
@@ -290,6 +293,8 @@ fn bridge_receiver(
     OWN_ACCOUNT.to_vec(),
     support::snapshot_public_key(),
     expiry_secs,
+    support::issuer_root_public_key(),
+    support::issuer_cert(),
   )
 }
 

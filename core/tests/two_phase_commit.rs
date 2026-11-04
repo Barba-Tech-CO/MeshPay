@@ -8,6 +8,7 @@ use meshpay_core::tx_keys::{compressed_public_key, signing_key_from_seed};
 use meshpay_core::tx_wire::ack_receipt::AckReceipt;
 use meshpay_core::tx_wire::cheque_spend::ChequeSpend;
 use meshpay_core::tx_wire::cheque_spend_body::ChequeSpendBody;
+use meshpay_core::tx_wire::cheque_stub_body::ChequeStubBody;
 use meshpay_core::tx_wire::tx_propose::TxPropose;
 use prost::Message;
 use rusqlite::Connection;
@@ -59,6 +60,7 @@ impl Lab {
       &PAYEE_SEED,
       &self.payer_public_key,
       OWN_ACCOUNT,
+      support::issuer_trust(),
     )
     .expect("open receiver")
   }
@@ -525,17 +527,23 @@ fn dart_facing_api_runs_the_full_exchange() {
     path("r.db"),
     DB_KEY.to_vec(),
     payee_key.seed,
-    payer_key.public_key,
+    payer_key.public_key.clone(),
     OWN_ACCOUNT.to_vec(),
     support::snapshot_public_key(),
     support::E,
+    support::issuer_root_public_key(),
+    support::issuer_cert(),
   )
   .unwrap();
   receiver
     .install_snapshot(support::signed_snapshot(support::T_SRV), 0, None)
     .unwrap();
   let (body, payee) = spend_body(3);
-  let stub = support::stub_for(&body);
+  let cheque_id = ChequeSpendBody::decode(body.as_slice()).unwrap().cheque_id;
+  let stub = support::seal(&ChequeStubBody {
+    signer_pubkey: payer_key.public_key,
+    ..support::stub_body(&cheque_id, support::T_SRV + support::E)
+  });
   let propose = payer.propose(body, 4, payee, stub).unwrap();
   let ack = receiver.on_propose(propose.clone(), 0, None).unwrap();
   assert_eq!(receiver.on_propose(propose, 0, None).unwrap(), ack);

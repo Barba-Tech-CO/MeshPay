@@ -14,11 +14,12 @@ pub fn verifying_key_from_sec1(bytes: &[u8]) -> Result<VerifyingKey, String> {
 
 /// Compressed SEC1 (33 bytes), the PRD public key format.
 pub fn compressed_public_key(signing_key: &SigningKey) -> Vec<u8> {
-  signing_key
-    .verifying_key()
-    .to_sec1_point(true)
-    .as_bytes()
-    .to_vec()
+  compressed_public_key_of(signing_key.verifying_key())
+}
+
+/// Compressed SEC1 (33 bytes) of a public key.
+pub fn compressed_public_key_of(verifying_key: &VerifyingKey) -> Vec<u8> {
+  verifying_key.to_sec1_point(true).as_bytes().to_vec()
 }
 
 /// Raw 64-byte ECDSA signature (deterministic, RFC 6979).

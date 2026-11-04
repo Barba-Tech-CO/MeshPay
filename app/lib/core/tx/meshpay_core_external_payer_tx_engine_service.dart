@@ -6,6 +6,7 @@ import '../keys/payment_key_identity.dart';
 import '../keys/payment_key_signer.dart';
 import '../storage/app_support_directory_service.dart';
 import 'external_tx_signing_helper.dart';
+import 'lab_cheque_stub_helper.dart';
 import 'lab_tx_storage_helper.dart';
 import 'payer_tx_engine_service.dart';
 
@@ -23,6 +24,18 @@ class MeshpayCoreExternalPayerTxEngineService implements PayerTxEngineService {
 
   @override
   Future<Uint8List> getPublicKey() async => (await _ensureKey()).publicKey;
+
+  @override
+  Future<Uint8List> labStub({
+    required Uint8List chequeId,
+    required int maxAmountUnits,
+    required int issuedAtUnix,
+  }) async => LabChequeStubHelper.forCheque(
+    chequeId: chequeId,
+    signerPubkey: await getPublicKey(),
+    maxAmountUnits: maxAmountUnits,
+    issuedAtUnix: issuedAtUnix,
+  );
 
   @override
   Future<int> nextCounter() {

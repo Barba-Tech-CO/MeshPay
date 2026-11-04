@@ -9,6 +9,7 @@ import '../keys/payment_key_identity.dart';
 import '../keys/payment_key_signer.dart';
 import '../storage/app_support_directory_service.dart';
 import 'external_tx_signing_helper.dart';
+import 'issuer_config_helper.dart';
 import 'lab_cheque_stub_helper.dart';
 import 'lab_tx_storage_helper.dart';
 import 'receiver_clock_helper.dart';
@@ -49,6 +50,8 @@ class MeshpayCoreExternalReceiverTxEngineService
       ownAccountId: identity.publicKey,
       snapshotPublicKey: LabDtnSnapshotKeyHelper.publicKey(),
       expirySecs: BigInt.from(LabChequeStubHelper.expirySeconds),
+      issuerRootPublicKey: await IssuerConfigHelper.rootPublicKey(),
+      issuerCert: await IssuerConfigHelper.cert(),
     );
   }
 

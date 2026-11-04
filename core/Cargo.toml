@@ -26,3 +26,17 @@ tempfile = "3.27.0"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
+
+# Debug-build P-256 is slow enough to starve the SIGKILL recovery tests once stubs are verified.
+[profile.dev.package.p256]
+opt-level = 3
+[profile.dev.package.ecdsa]
+opt-level = 3
+[profile.dev.package.elliptic-curve]
+opt-level = 3
+[profile.dev.package.primeorder]
+opt-level = 3
+[profile.dev.package.primefield]
+opt-level = 3
+[profile.dev.package.crypto-bigint]
+opt-level = 3

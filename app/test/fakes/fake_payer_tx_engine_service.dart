@@ -1,7 +1,11 @@
 import 'dart:typed_data';
 
+import 'package:meshpay/core/server/codec/proto_writer_helper.dart';
+import 'package:meshpay/core/server/messages/cheque_stub.dart';
+import 'package:meshpay/core/tx/lab_cheque_stub_helper.dart';
 import 'package:meshpay/core/tx/payer_tx_engine_service.dart';
 import 'package:meshpay/core/tx/tx_wire_helper.dart';
+import 'package:protobuf/protobuf.dart';
 
 /// Mirrors the Rust engine contract: propose is idempotent per counter,
 /// `resumePending` returns the stored bytes, `onAck` commits.
@@ -22,6 +26,28 @@ class FakePayerTxEngineService implements PayerTxEngineService {
   @override
   Future<Uint8List> getPublicKey() async =>
       Uint8List.fromList(List<int>.filled(33, 2));
+
+  /// Unsealed stand-in for the Rust lab sealer (no native library in unit tests).
+  @override
+  Future<Uint8List> labStub({
+    required Uint8List chequeId,
+    required int maxAmountUnits,
+    required int issuedAtUnix,
+  }) async {
+    final body = CodedBufferWriter();
+    ProtoWriterHelper.bytes(body, 1, chequeId);
+    ProtoWriterHelper.bytes(body, 5, await getPublicKey());
+    ProtoWriterHelper.uint64(body, 6, maxAmountUnits);
+    ProtoWriterHelper.uint64(
+      body,
+      7,
+      issuedAtUnix + LabChequeStubHelper.expirySeconds,
+    );
+    return ChequeStub(
+      body: body.toBuffer(),
+      serverSignature: Uint8List(0),
+    ).toBytes();
+  }
 
   @override
   Future<int> nextCounter() async => ++lastCounter;

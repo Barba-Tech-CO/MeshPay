@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:meshpay_core/meshpay_core.dart';
 
 import '../storage/app_support_directory_service.dart';
+import 'lab_cheque_stub_helper.dart';
 import 'lab_tx_storage_helper.dart';
 import 'payer_tx_engine_service.dart';
 
@@ -18,6 +19,18 @@ class MeshpayCorePayerTxEngineService implements PayerTxEngineService {
   @override
   Future<Uint8List> getPublicKey() =>
       LabTxStorageHelper.publicKey(_directory, _side);
+
+  @override
+  Future<Uint8List> labStub({
+    required Uint8List chequeId,
+    required int maxAmountUnits,
+    required int issuedAtUnix,
+  }) async => LabChequeStubHelper.forCheque(
+    chequeId: chequeId,
+    signerPubkey: await getPublicKey(),
+    maxAmountUnits: maxAmountUnits,
+    issuedAtUnix: issuedAtUnix,
+  );
 
   @override
   Future<int> nextCounter() {
