@@ -31,7 +31,11 @@ class ReceiverClockHelper {
     }
     final held = await dtn.snapshotBytes();
     if (held != null) {
-      await _install(engine, held, sample);
+      try {
+        await _install(engine, held, sample);
+      } on Object catch (error) {
+        debugPrint('server snapshot refused: ${error.runtimeType}');
+      }
     }
     return sample;
   }

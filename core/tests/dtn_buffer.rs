@@ -1,3 +1,5 @@
+mod support;
+
 use chacha20poly1305::{ChaCha20Poly1305, Key, KeyInit, Nonce, aead::Aead};
 use meshpay_core::dtn_buffer::{
   BUFFER_CAP_BYTES, DtnEngine, MAX_AGE_SECS, MAX_ENVELOPE_BYTES, MAX_PER_CONNECTION,
@@ -6,8 +8,9 @@ use meshpay_core::dtn_buffer::{
 use meshpay_core::dtn_ingest_outcome::IngestOutcome;
 use meshpay_core::dtn_peer_session::DtnPeerSession;
 use meshpay_core::dtn_snapshot::snapshot_signing_message;
+use meshpay_core::issuer_trust::IssuerTrust;
 use meshpay_core::tx_database::open_database;
-use meshpay_core::tx_keys::{compressed_public_key, sign, signing_key_from_seed};
+use meshpay_core::tx_keys::{sign, signing_key_from_seed};
 use meshpay_core::tx_wire::revocation_snapshot::RevocationSnapshot;
 use meshpay_core::tx_wire::sync_envelope::SyncEnvelope;
 use prost::Message;
@@ -15,6 +18,7 @@ use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::LazyLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
@@ -22,8 +26,23 @@ const NOW: u64 = 1_900_000_000;
 const DB_KEY: [u8; 32] = [5; 32];
 const SNAPSHOT_SEED: [u8; 32] = [11; 32];
 
-fn snapshot_public_key() -> Vec<u8> {
-  compressed_public_key(&signing_key_from_seed(&SNAPSHOT_SEED).unwrap())
+static SNAPSHOT_TRUST: LazyLock<IssuerTrust> = LazyLock::new(|| {
+  IssuerTrust::new_for_role(
+    &support::issuer_root_public_key(),
+    &support::cert_with(
+      [9; 32],
+      SNAPSHOT_SEED,
+      IssuerTrust::SNAPSHOT_ROLE,
+      NOW - 1,
+      NOW + 1,
+    ),
+    IssuerTrust::SNAPSHOT_ROLE,
+  )
+  .unwrap()
+});
+
+fn snapshot_trust() -> &'static IssuerTrust {
+  &SNAPSHOT_TRUST
 }
 
 const TEST_CAP: i64 = 64 * 1024;
@@ -52,7 +71,7 @@ impl Node {
       DtnEngine::open_with_clock(
         &path,
         &DB_KEY,
-        &snapshot_public_key(),
+        snapshot_trust(),
         cap_bytes,
         rate,
         Box::new(move || Duration::from_secs(seconds.load(Ordering::SeqCst))),
@@ -605,15 +624,15 @@ fn data_survives_crash_and_reopen_and_needs_the_key() {
     engine,
   } = node;
   drop(engine); // no orderly close step exists; WAL + synchronous=FULL carry durability
-  let reopened = DtnEngine::open(&path, &DB_KEY, &snapshot_public_key(), UNLIMITED_RATE).unwrap();
+  let reopened = DtnEngine::open(&path, &DB_KEY, snapshot_trust(), UNLIMITED_RATE).unwrap();
   assert_eq!(reopened.envelope_count().unwrap(), 1);
   assert_eq!(
     reopened.ingest(&bytes, NOW).unwrap(),
     IngestOutcome::Duplicate
   );
   assert_eq!(reopened.snapshot_bytes().unwrap(), Some(signed));
-  assert!(DtnEngine::open(&path, &DB_KEY, &snapshot_public_key(), 0).is_err());
-  assert!(DtnEngine::open(&path, &[6; 32], &snapshot_public_key(), UNLIMITED_RATE).is_err());
+  assert!(DtnEngine::open(&path, &DB_KEY, snapshot_trust(), 0).is_err());
+  assert!(DtnEngine::open(&path, &[6; 32], snapshot_trust(), UNLIMITED_RATE).is_err());
 }
 
 #[test]
@@ -651,9 +670,13 @@ fn random_and_mutated_bytes_never_panic() {
 }
 
 fn signed_snapshot(version: u64, revoked_ids: usize) -> Vec<u8> {
+  signed_snapshot_at(version, revoked_ids, NOW)
+}
+
+fn signed_snapshot_at(version: u64, revoked_ids: usize, issued_at_unix: u64) -> Vec<u8> {
   let mut snapshot = RevocationSnapshot {
     version,
-    issued_at_unix: NOW,
+    issued_at_unix,
     revoked_signer_key_ids: (0..revoked_ids).map(|_| random_bytes(32)).collect(),
     signer_key_id: vec![1; 32],
     ..Default::default()
@@ -661,6 +684,57 @@ fn signed_snapshot(version: u64, revoked_ids: usize) -> Vec<u8> {
   let key = signing_key_from_seed(&SNAPSHOT_SEED).unwrap();
   snapshot.server_signature = sign(&key, &snapshot_signing_message(&snapshot));
   snapshot.encode_to_vec()
+}
+
+#[test]
+fn dtn_engine_rejects_a_validly_signed_snapshot_outside_its_cert_window() {
+  let node = Node::new();
+
+  assert!(
+    node
+      .engine
+      .ingest_snapshot(&signed_snapshot_at(5, 2, NOW - 2))
+      .unwrap_err()
+      .contains("snapshot issued_at outside server key cert window")
+  );
+  assert_eq!(node.engine.snapshot_bytes().unwrap(), None);
+}
+
+#[test]
+fn dtn_engine_construction_requires_verified_snapshot_trust() {
+  let directory = tempfile::tempdir().unwrap();
+  let path = directory.path().join("verified-trust.db");
+  let engine = DtnEngine::open(&path, &DB_KEY, snapshot_trust(), UNLIMITED_RATE).unwrap();
+  assert_eq!(engine.ingest_snapshot(&signed_snapshot(5, 2)).unwrap(), 5);
+
+  let invalid_cert = support::cert_with(
+    [10; 32],
+    SNAPSHOT_SEED,
+    IssuerTrust::SNAPSHOT_ROLE,
+    NOW - 1,
+    NOW + 1,
+  );
+  assert!(
+    IssuerTrust::new_for_role(
+      &support::issuer_root_public_key(),
+      &invalid_cert,
+      IssuerTrust::SNAPSHOT_ROLE,
+    )
+    .is_err()
+  );
+
+  let issuer_trust = IssuerTrust::new(
+    &support::issuer_root_public_key(),
+    &support::cert_with(
+      [9; 32],
+      SNAPSHOT_SEED,
+      IssuerTrust::ISSUER_ROLE,
+      NOW - 1,
+      NOW + 1,
+    ),
+  )
+  .unwrap();
+  assert!(DtnEngine::open(&path, &DB_KEY, &issuer_trust, UNLIMITED_RATE).is_err());
 }
 
 #[test]
@@ -800,7 +874,7 @@ CREATE TABLE dtn_envelopes (
   size_bytes INTEGER NOT NULL CHECK (size_bytes BETWEEN 1 AND 5120)
 ) STRICT;";
   drop(open_database(&path, &DB_KEY, old_schema).unwrap());
-  let engine = DtnEngine::open(&path, &DB_KEY, &snapshot_public_key(), UNLIMITED_RATE).unwrap();
+  let engine = DtnEngine::open(&path, &DB_KEY, snapshot_trust(), UNLIMITED_RATE).unwrap();
   let session = DtnPeerSession::with_origin_pair(Arc::new(engine), b"a|b".to_vec());
   assert_eq!(
     session.ingest(&envelope(payload(1), NOW, 4), NOW).unwrap(),

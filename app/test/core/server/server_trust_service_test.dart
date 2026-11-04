@@ -10,6 +10,7 @@ import 'package:meshpay/core/server/trust/server_trust_service.dart';
 import 'package:meshpay/core/tx/issuer_config_helper.dart';
 import 'package:meshpay/core/tx/receiver_clock_helper.dart';
 import 'package:meshpay_core/meshpay_core.dart';
+import 'package:meshpay_core/src/rust/frb_generated.dart' show RustLibApi;
 import 'package:meshpay_native/clock_sample.dart';
 import 'package:protobuf/protobuf.dart';
 
@@ -36,8 +37,11 @@ Uint8List _certBytes(int notAfterUnix) {
 }
 
 File _certFile(Directory dir) => File('${dir.path}/issuer_cert.bin');
+File _snapshotCertFile(Directory dir) => File('${dir.path}/snapshot_cert.bin');
 
 void main() {
+  setUpAll(() => RustLib.initMock(api: _FakeRustLibApi()));
+
   late FakeServerClient client;
   late Directory dir;
   late ServerTrustService trust;
@@ -75,6 +79,43 @@ void main() {
       );
 
       expect(await trust.issuerCert(), cert);
+    },
+  );
+
+  test(
+    'snapshot cert is stored separately and pinned to the same root',
+    () async {
+      final cert = _certBytes(_nowUnix + 20 * _daySeconds);
+      client.serverKey = ServerKeyResponse(
+        rootPublicKey: _root,
+        issuerCert: _certBytes(_nowUnix + _daySeconds),
+        snapshotCert: cert,
+      );
+
+      expect(await trust.snapshotCert(), cert);
+      expect(await _snapshotCertFile(dir).readAsBytes(), cert);
+      expect(_certFile(dir).existsSync(), isFalse);
+    },
+  );
+
+  test(
+    'invalid fetched snapshot cert does not replace the stored cert',
+    () async {
+      final stored = _certBytes(_nowUnix + 2 * _daySeconds);
+      await _snapshotCertFile(dir).writeAsBytes(stored);
+      client.serverKey = ServerKeyResponse(
+        rootPublicKey: _root,
+        issuerCert: _certBytes(_nowUnix + _daySeconds),
+        snapshotCert: Uint8List.fromList(<int>[
+          ..._certBytes(_nowUnix + 30 * _daySeconds),
+          0x78,
+          0xff,
+          0x01,
+        ]),
+      );
+
+      await expectLater(trust.snapshotCert(), throwsStateError);
+      expect(await _snapshotCertFile(dir).readAsBytes(), stored);
     },
   );
 
@@ -335,11 +376,13 @@ void main() {
       });
     }
 
-    test('a refused held snapshot still propagates', () async {
+    test('a refused held snapshot is logged without failing prepare', () async {
       client.snapshot = _serverSnapshot;
       final engine = _RefusingEngine('bad signature', refuseAll: true);
 
-      await expectLater(prepare(engine), throwsStateError);
+      await prepare(engine);
+
+      expect(engine.calls, <String>['installSnapshot', 'installSnapshot']);
     });
   });
 }
@@ -366,4 +409,19 @@ class _RefusingEngine extends FakeExternalReceiverEngine {
       bootCount: bootCount,
     );
   }
+}
+
+class _FakeRustLibApi implements RustLibApi {
+  @override
+  Future<void> crateApiVerifySnapshotCert({
+    required List<int> rootPublicKey,
+    required List<int> cert,
+  }) async {
+    if (cert.contains(255)) {
+      throw StateError('server key cert: bad root signature');
+    }
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

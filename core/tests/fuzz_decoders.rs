@@ -9,6 +9,7 @@ mod support;
 use meshpay_core::dtn_buffer::DtnEngine;
 use meshpay_core::dtn_ingest_outcome::IngestOutcome;
 use meshpay_core::dtn_snapshot::{snapshot_signing_message, verify_snapshot};
+use meshpay_core::issuer_trust::IssuerTrust;
 use meshpay_core::payer_tx_engine::PayerEngine;
 use meshpay_core::receiver_tx_engine::ReceiverEngine;
 use meshpay_core::tx_hashing::{derive_tx_id, spend_signing_message};
@@ -83,10 +84,23 @@ fn input(golden: Vec<u8>) -> impl Strategy<Value = Vec<u8>> {
 }
 
 fn dtn_engine(directory: &Path) -> DtnEngine {
+  let snapshot_cert = support::cert_with(
+    [9; 32],
+    SNAPSHOT_SEED,
+    IssuerTrust::SNAPSHOT_ROLE,
+    NOW - 1,
+    NOW + 1,
+  );
+  let snapshot_trust = IssuerTrust::new_for_role(
+    &support::issuer_root_public_key(),
+    &snapshot_cert,
+    IssuerTrust::SNAPSHOT_ROLE,
+  )
+  .unwrap();
   DtnEngine::open_with_clock(
     &directory.join("dtn.db"),
     &DB_KEY,
-    &public_key(&SNAPSHOT_SEED),
+    &snapshot_trust,
     5 * 1024 * 1024,
     1_000_000,
     Box::new(|| Duration::ZERO),

@@ -529,7 +529,7 @@ fn dart_facing_api_runs_the_full_exchange() {
     payee_key.seed,
     payer_key.public_key.clone(),
     OWN_ACCOUNT.to_vec(),
-    support::snapshot_public_key(),
+    support::snapshot_cert(),
     support::E,
     support::issuer_root_public_key(),
     support::issuer_cert(),

@@ -39,6 +39,30 @@ Future<Uint8List> labIssuerRootPublicKey() =>
 Future<Uint8List> labIssuerCert({required BigInt notBeforeUnix}) =>
     RustLib.instance.api.crateApiLabIssuerCert(notBeforeUnix: notBeforeUnix);
 
+/// LAB ONLY: lab SNAPSHOT cert chained to the public lab root.
+Future<Uint8List> labSnapshotCert({required BigInt notBeforeUnix}) =>
+    RustLib.instance.api.crateApiLabSnapshotCert(notBeforeUnix: notBeforeUnix);
+
+/// Verifies the pinned-root signature and SNAPSHOT role of a server certificate.
+Future<void> verifySnapshotCert({
+  required List<int> rootPublicKey,
+  required List<int> cert,
+}) => RustLib.instance.api.crateApiVerifySnapshotCert(
+  rootPublicKey: rootPublicKey,
+  cert: cert,
+);
+
+/// Verifies that a snapshot timestamp falls inside the signed SNAPSHOT certificate window.
+Future<void> verifySnapshotCertAtTime({
+  required List<int> rootPublicKey,
+  required List<int> cert,
+  required BigInt timestampUnix,
+}) => RustLib.instance.api.crateApiVerifySnapshotCertAtTime(
+  rootPublicKey: rootPublicKey,
+  cert: cert,
+  timestampUnix: timestampUnix,
+);
+
 /// LAB ONLY: `ChequeStub` sealed by the lab ISSUER key (the lab has no issuing server).
 /// `signer_pubkey` (SEC1, 33 or 65 bytes) is stored compressed, as the receiver compares it.
 Future<Uint8List> labChequeStub({
@@ -83,17 +107,18 @@ abstract class DtnBuffer implements RustOpaqueInterface {
   /// Envelopes (bytes, one hop consumed) the peer lacks, at most 20.
   Future<List<Uint8List>> missingFrom({required List<Uint8List> peerSummary});
 
-  /// `db_key` is the raw 32-byte SQLCipher key; `snapshot_public_key` is the compressed P-256
-  /// SNAPSHOT role key; `max_ingest_per_minute` is the global ingest rate limit.
+  /// `snapshot_cert` is the SNAPSHOT cert chained to the pinned root public key.
   static Future<DtnBuffer> open({
     required String dbPath,
     required List<int> dbKey,
-    required List<int> snapshotPublicKey,
+    required List<int> snapshotCert,
+    required List<int> issuerRootPublicKey,
     required int maxIngestPerMinute,
   }) => RustLib.instance.api.crateApiDtnBufferOpen(
     dbPath: dbPath,
     dbKey: dbKey,
-    snapshotPublicKey: snapshotPublicKey,
+    snapshotCert: snapshotCert,
+    issuerRootPublicKey: issuerRootPublicKey,
     maxIngestPerMinute: maxIngestPerMinute,
   );
 
@@ -245,7 +270,7 @@ abstract class ReceiverTxEngine implements RustOpaqueInterface {
     BigInt? bootCount,
   });
 
-  /// `snapshot_public_key` is the compressed P-256 SNAPSHOT role key; `expiry_secs` is `E`;
+  /// `snapshot_cert` is the SNAPSHOT cert chained to `issuer_root_public_key`; `expiry_secs` is `E`;
   /// `issuer_cert` is the ISSUER `ServerKeyCert` chained to the pinned `issuer_root_public_key`,
   /// whose key must seal every incoming stub.
   static Future<ReceiverTxEngine> open({
@@ -254,7 +279,7 @@ abstract class ReceiverTxEngine implements RustOpaqueInterface {
     required List<int> signingSeed,
     required List<int> payerPublicKey,
     required List<int> ownAccountId,
-    required List<int> snapshotPublicKey,
+    required List<int> snapshotCert,
     required BigInt expirySecs,
     required List<int> issuerRootPublicKey,
     required List<int> issuerCert,
@@ -264,7 +289,7 @@ abstract class ReceiverTxEngine implements RustOpaqueInterface {
     signingSeed: signingSeed,
     payerPublicKey: payerPublicKey,
     ownAccountId: ownAccountId,
-    snapshotPublicKey: snapshotPublicKey,
+    snapshotCert: snapshotCert,
     expirySecs: expirySecs,
     issuerRootPublicKey: issuerRootPublicKey,
     issuerCert: issuerCert,
@@ -278,7 +303,7 @@ abstract class ReceiverTxEngine implements RustOpaqueInterface {
     required List<int> ownPublicKey,
     required List<int> payerPublicKey,
     required List<int> ownAccountId,
-    required List<int> snapshotPublicKey,
+    required List<int> snapshotCert,
     required BigInt expirySecs,
     required List<int> issuerRootPublicKey,
     required List<int> issuerCert,
@@ -288,7 +313,7 @@ abstract class ReceiverTxEngine implements RustOpaqueInterface {
     ownPublicKey: ownPublicKey,
     payerPublicKey: payerPublicKey,
     ownAccountId: ownAccountId,
-    snapshotPublicKey: snapshotPublicKey,
+    snapshotCert: snapshotCert,
     expirySecs: expirySecs,
     issuerRootPublicKey: issuerRootPublicKey,
     issuerCert: issuerCert,
