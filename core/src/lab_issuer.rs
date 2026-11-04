@@ -23,17 +23,30 @@ fn issuer() -> SigningKey {
   lab_key(b"meshpay-lab-issuer-key-v1")
 }
 
+fn snapshot() -> SigningKey {
+  lab_key(b"meshpay-lab-snapshot-key-v1")
+}
+
 pub fn root_public_key() -> Vec<u8> {
   compressed_public_key(&root())
 }
 
 /// Lab ISSUER `ServerKeyCert` valid for 30 days from `not_before_unix`.
 pub fn cert(not_before_unix: u64) -> Vec<u8> {
-  let pubkey = compressed_public_key(&issuer());
+  cert_for_key(&issuer(), IssuerTrust::ISSUER_ROLE, not_before_unix)
+}
+
+/// Lab SNAPSHOT `ServerKeyCert` valid for 30 days from `not_before_unix`.
+pub fn snapshot_cert(not_before_unix: u64) -> Vec<u8> {
+  cert_for_key(&snapshot(), IssuerTrust::SNAPSHOT_ROLE, not_before_unix)
+}
+
+fn cert_for_key(key: &SigningKey, role: i32, not_before_unix: u64) -> Vec<u8> {
+  let pubkey = compressed_public_key(key);
   let body = ServerKeyCertBody {
     key_id: IssuerTrust::key_id(&pubkey),
     pubkey,
-    role: IssuerTrust::ISSUER_ROLE,
+    role,
     not_before_unix,
     not_after_unix: not_before_unix.saturating_add(IssuerTrust::MAX_CERT_LIFETIME_SECS),
   }

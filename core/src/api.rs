@@ -446,6 +446,26 @@ pub fn lab_issuer_cert(not_before_unix: u64) -> Vec<u8> {
   lab_issuer::cert(not_before_unix)
 }
 
+/// LAB ONLY: lab SNAPSHOT cert chained to the public lab root.
+pub fn lab_snapshot_cert(not_before_unix: u64) -> Vec<u8> {
+  lab_issuer::snapshot_cert(not_before_unix)
+}
+
+/// Verifies the pinned-root signature and SNAPSHOT role of a server certificate.
+pub fn verify_snapshot_cert(root_public_key: Vec<u8>, cert: Vec<u8>) -> Result<(), String> {
+  IssuerTrust::new_for_role(&root_public_key, &cert, IssuerTrust::SNAPSHOT_ROLE).map(|_| ())
+}
+
+/// Verifies that a snapshot timestamp falls inside the signed SNAPSHOT certificate window.
+pub fn verify_snapshot_cert_at_time(
+  root_public_key: Vec<u8>,
+  cert: Vec<u8>,
+  timestamp_unix: u64,
+) -> Result<(), String> {
+  let trust = IssuerTrust::new_for_role(&root_public_key, &cert, IssuerTrust::SNAPSHOT_ROLE)?;
+  IssuerTrust::check_snapshot_time(timestamp_unix, trust.cert_window())
+}
+
 /// LAB ONLY: `ChequeStub` sealed by the lab ISSUER key (the lab has no issuing server).
 /// `signer_pubkey` (SEC1, 33 or 65 bytes) is stored compressed, as the receiver compares it.
 pub fn lab_cheque_stub(
@@ -566,13 +586,14 @@ const MAX_STORED_UNIX: u64 = i64::MAX as u64 - MAX_FORWARD_JUMP_SECONDS - 1;
 pub struct ReceiverTxEngine {
   engine: ReceiverEngine,
   snapshot_key: VerifyingKey,
+  snapshot_cert_window: (u64, u64),
   expiry_secs: u64,
   /// Serializes read-modify-write of the clock row persisted in the engine database.
   clock_lock: Mutex<()>,
 }
 
 impl ReceiverTxEngine {
-  /// `snapshot_public_key` is the compressed P-256 SNAPSHOT role key; `expiry_secs` is `E`;
+  /// `snapshot_cert` is the SNAPSHOT cert chained to `issuer_root_public_key`; `expiry_secs` is `E`;
   /// `issuer_cert` is the ISSUER `ServerKeyCert` chained to the pinned `issuer_root_public_key`,
   /// whose key must seal every incoming stub.
   #[allow(clippy::too_many_arguments)]
@@ -582,7 +603,7 @@ impl ReceiverTxEngine {
     signing_seed: Vec<u8>,
     payer_public_key: Vec<u8>,
     own_account_id: Vec<u8>,
-    snapshot_public_key: Vec<u8>,
+    snapshot_cert: Vec<u8>,
     expiry_secs: u64,
     issuer_root_public_key: Vec<u8>,
     issuer_cert: Vec<u8>,
@@ -596,7 +617,8 @@ impl ReceiverTxEngine {
         &own_account_id,
         IssuerTrust::new(&issuer_root_public_key, &issuer_cert)?,
       )?,
-      &snapshot_public_key,
+      &snapshot_cert,
+      &issuer_root_public_key,
       expiry_secs,
     )
   }
@@ -610,7 +632,7 @@ impl ReceiverTxEngine {
     own_public_key: Vec<u8>,
     payer_public_key: Vec<u8>,
     own_account_id: Vec<u8>,
-    snapshot_public_key: Vec<u8>,
+    snapshot_cert: Vec<u8>,
     expiry_secs: u64,
     issuer_root_public_key: Vec<u8>,
     issuer_cert: Vec<u8>,
@@ -624,14 +646,16 @@ impl ReceiverTxEngine {
         &own_account_id,
         IssuerTrust::new(&issuer_root_public_key, &issuer_cert)?,
       )?,
-      &snapshot_public_key,
+      &snapshot_cert,
+      &issuer_root_public_key,
       expiry_secs,
     )
   }
 
   fn with_engine(
     engine: ReceiverEngine,
-    snapshot_public_key: &[u8],
+    snapshot_cert: &[u8],
+    root_public_key: &[u8],
     expiry_secs: u64,
   ) -> Result<ReceiverTxEngine, String> {
     if !(ChequeAcceptance::MIN_EXPIRY_SECS..=ChequeAcceptance::MAX_EXPIRY_SECS)
@@ -639,9 +663,12 @@ impl ReceiverTxEngine {
     {
       return Err("expiry E must be 24 to 168 hours".to_owned());
     }
+    let snapshot_trust =
+      IssuerTrust::new_for_role(root_public_key, snapshot_cert, IssuerTrust::SNAPSHOT_ROLE)?;
     Ok(ReceiverTxEngine {
       engine,
-      snapshot_key: verifying_key_from_sec1(snapshot_public_key)?,
+      snapshot_key: *snapshot_trust.public_key(),
+      snapshot_cert_window: snapshot_trust.cert_window(),
       expiry_secs,
       clock_lock: Mutex::new(()),
     })
@@ -666,6 +693,7 @@ impl ReceiverTxEngine {
     if issued_at > MAX_STORED_UNIX {
       return Err("snapshot issued_at out of range".to_owned());
     }
+    IssuerTrust::check_snapshot_time(issued_at, self.snapshot_cert_window)?;
     if i64::try_from(monotonic_nanos).is_err() {
       return Err("monotonic reading out of range".to_owned());
     }
@@ -868,20 +896,25 @@ pub struct DtnBuffer {
 }
 
 impl DtnBuffer {
-  /// `db_key` is the raw 32-byte SQLCipher key; `snapshot_public_key` is the compressed P-256
-  /// SNAPSHOT role key; `max_ingest_per_minute` is the global ingest rate limit.
+  /// `snapshot_cert` is the SNAPSHOT cert chained to the pinned root public key.
   pub fn open(
     db_path: String,
     db_key: Vec<u8>,
-    snapshot_public_key: Vec<u8>,
+    snapshot_cert: Vec<u8>,
+    issuer_root_public_key: Vec<u8>,
     max_ingest_per_minute: u32,
   ) -> Result<DtnBuffer, String> {
     let db_key = Zeroizing::new(db_key);
+    let snapshot_trust = IssuerTrust::new_for_role(
+      &issuer_root_public_key,
+      &snapshot_cert,
+      IssuerTrust::SNAPSHOT_ROLE,
+    )?;
     Ok(DtnBuffer {
       engine: Arc::new(DtnEngine::open(
         Path::new(&db_path),
         &db_key,
-        &snapshot_public_key,
+        &snapshot_trust,
         max_ingest_per_minute,
       )?),
     })

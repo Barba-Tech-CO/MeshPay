@@ -1,7 +1,7 @@
 use crate::dtn_ingest_outcome::IngestOutcome;
 use crate::dtn_snapshot::verify_snapshot;
+use crate::issuer_trust::IssuerTrust;
 use crate::tx_database::{open_database, sql_error, to_sql_integer};
-use crate::tx_keys::verifying_key_from_sec1;
 use crate::tx_wire::sync_envelope::SyncEnvelope;
 use p256::ecdsa::VerifyingKey;
 use prost::Message;
@@ -79,6 +79,7 @@ fn migrate_origin_pair(connection: &Connection) -> Result<(), String> {
 pub struct DtnEngine {
   connection: Mutex<Connection>,
   snapshot_key: VerifyingKey,
+  snapshot_cert_window: (u64, u64),
   cap_bytes: i64,
   max_ingest_per_minute: usize,
   /// Monotonic time since engine start; the rate limiter never reads the caller's clock.
@@ -88,17 +89,17 @@ pub struct DtnEngine {
 }
 
 impl DtnEngine {
-  /// `db_key` is the raw 32-byte SQLCipher key; `snapshot_public_key` is a compressed P-256 key.
+  /// `db_key` is the raw 32-byte SQLCipher key; `snapshot_trust` must be a verified SNAPSHOT cert.
   pub fn open(
     db_path: &Path,
     db_key: &[u8],
-    snapshot_public_key: &[u8],
+    snapshot_trust: &IssuerTrust,
     max_ingest_per_minute: u32,
   ) -> Result<Self, String> {
     Self::open_with_cap(
       db_path,
       db_key,
-      snapshot_public_key,
+      snapshot_trust,
       BUFFER_CAP_BYTES,
       max_ingest_per_minute,
     )
@@ -107,7 +108,7 @@ impl DtnEngine {
   pub fn open_with_cap(
     db_path: &Path,
     db_key: &[u8],
-    snapshot_public_key: &[u8],
+    snapshot_trust: &IssuerTrust,
     cap_bytes: i64,
     max_ingest_per_minute: u32,
   ) -> Result<Self, String> {
@@ -115,7 +116,7 @@ impl DtnEngine {
     Self::open_with_clock(
       db_path,
       db_key,
-      snapshot_public_key,
+      snapshot_trust,
       cap_bytes,
       max_ingest_per_minute,
       Box::new(move || start.elapsed()),
@@ -126,7 +127,7 @@ impl DtnEngine {
   pub fn open_with_clock(
     db_path: &Path,
     db_key: &[u8],
-    snapshot_public_key: &[u8],
+    snapshot_trust: &IssuerTrust,
     cap_bytes: i64,
     max_ingest_per_minute: u32,
     clock: Box<dyn Fn() -> Duration + Send + Sync>,
@@ -134,11 +135,13 @@ impl DtnEngine {
     if cap_bytes <= 0 || max_ingest_per_minute == 0 {
       return Err("cap and ingest rate limit must be positive".to_owned());
     }
+    snapshot_trust.require_role(IssuerTrust::SNAPSHOT_ROLE)?;
     let connection = open_database(db_path, db_key, schema())?;
     migrate_origin_pair(&connection)?;
     Ok(Self {
       connection: Mutex::new(connection),
-      snapshot_key: verifying_key_from_sec1(snapshot_public_key)?,
+      snapshot_key: *snapshot_trust.public_key(),
+      snapshot_cert_window: snapshot_trust.cert_window(),
       cap_bytes,
       max_ingest_per_minute: max_ingest_per_minute as usize,
       clock,
@@ -388,6 +391,7 @@ impl DtnEngine {
   /// strictly greater than the stored one (PV-DTN-04). Returns the accepted version.
   pub fn ingest_snapshot(&self, snapshot_bytes: &[u8]) -> Result<u64, String> {
     let snapshot = verify_snapshot(snapshot_bytes, &self.snapshot_key)?;
+    IssuerTrust::check_snapshot_time(snapshot.issued_at_unix, self.snapshot_cert_window)?;
     let mut connection = self.connection()?;
     let transaction = connection
       .transaction_with_behavior(TransactionBehavior::Immediate)
