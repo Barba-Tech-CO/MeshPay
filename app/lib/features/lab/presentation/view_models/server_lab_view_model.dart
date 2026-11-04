@@ -8,7 +8,9 @@ import '../../../../core/server/client/server_client.dart';
 import '../../../../core/server/client/server_error_code.dart';
 import '../../../../core/server/client/server_exception.dart';
 import '../../../../core/server/messages/cheque_stub_body.dart';
+import '../../../../core/server/messages/revocation_snapshot_summary.dart';
 import '../../../../core/server/messages/server_attestation_level.dart';
+import '../../../../core/server/messages/server_key_cert_summary.dart';
 import '../../../../core/server/requests/deposit_request.dart';
 import '../../../../core/server/requests/issue_request.dart';
 import '../../../../core/server/requests/issue_request_body.dart';
@@ -22,6 +24,7 @@ import '../../../../core/server/signing/sec1_key_helper.dart';
 import '../../../../core/server/signing/server_account_id_helper.dart';
 import '../../../../core/server/signing/server_signing_message_helper.dart';
 import '../../../../core/server/signing/server_spend_helper.dart';
+import '../../../../core/server/trust/server_trust_service.dart';
 import '../../../../core/tx/random_bytes_helper.dart';
 import '../helpers/server_lab_message_helper.dart';
 
@@ -34,7 +37,8 @@ class ServerLabViewModel extends ChangeNotifier {
   ServerLabViewModel(
     this._client,
     this._keys,
-    this._signer, {
+    this._signer,
+    this._trust, {
     this._clock = DateTime.now,
   });
 
@@ -50,6 +54,7 @@ class ServerLabViewModel extends ChangeNotifier {
   final ServerClient _client;
   final HardwareKeyLabService _keys;
   final PaymentKeySigner _signer;
+  final ServerTrustService _trust;
   final DateTime Function() _clock;
 
   String _baseUrl = defaultBaseUrl;
@@ -63,10 +68,13 @@ class ServerLabViewModel extends ChangeNotifier {
   DepositResponse? _lastDeposit;
   BalanceResponse? _payerBalance;
   BalanceResponse? _payeeBalance;
+  ServerKeyCertSummary? _issuerCert;
+  RevocationSnapshotSummary? _snapshot;
   int _counter = 0;
   bool _isDisposed = false;
 
   String get baseUrl => _baseUrl;
+  String get trustBaseUrl => _trust.baseUrl;
   bool get sendAttestation => _sendAttestation;
   bool get isRunning => _isRunning;
   String? get error => _error;
@@ -77,15 +85,18 @@ class ServerLabViewModel extends ChangeNotifier {
   DepositResponse? get lastDeposit => _lastDeposit;
   BalanceResponse? get payerBalance => _payerBalance;
   BalanceResponse? get payeeBalance => _payeeBalance;
+  ServerKeyCertSummary? get issuerCert => _issuerCert;
+  RevocationSnapshotSummary? get snapshot => _snapshot;
 
-  /// Changing the URL after a registration drops every account-bound state.
+  /// Changing the URL drops every account- and trust-bound state.
   void setBaseUrl(String value) {
     final url = value.trim();
-    if (_payer != null && url != _baseUrl) {
-      _resetAccounts();
-      _notifyIfActive();
+    if (url == _baseUrl) {
+      return;
     }
+    _resetAccounts();
     _baseUrl = url;
+    _notifyIfActive();
   }
 
   void setSendAttestation(bool value) {
@@ -166,6 +177,21 @@ class ServerLabViewModel extends ChangeNotifier {
     }
   });
 
+  /// Exercises the receiver's trust fetch path. A stored cert skips the server
+  /// and the root check; a fresh fetch throws when the root is not the pinned one.
+  Future<void> fetchTrust() => _run(() async {
+    _issuerCert = null;
+    _snapshot = null;
+    final cert = await _trust.issuerCert();
+    final snapshot = await _trust.refreshSnapshot();
+    if (snapshot == null) {
+      _error = ServerLabMessageHelper.snapshotUnavailable;
+      return;
+    }
+    _issuerCert = ServerKeyCertSummary.fromBytes(cert);
+    _snapshot = RevocationSnapshotSummary.fromBytes(snapshot);
+  });
+
   void _resetAccounts() {
     _payer = null;
     _payee = null;
@@ -175,6 +201,8 @@ class ServerLabViewModel extends ChangeNotifier {
     _lastDeposit = null;
     _payerBalance = null;
     _payeeBalance = null;
+    _issuerCert = null;
+    _snapshot = null;
   }
 
   Future<BalanceResponse> _balance(

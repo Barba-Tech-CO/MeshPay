@@ -11,7 +11,18 @@ class ServerLabMessageHelper {
   static const String issueFirst =
       'Emita um talão com cheques disponíveis primeiro.';
 
+  static const String snapshotUnavailable =
+      'Snapshot de revogação indisponível no servidor.';
+
+  static String unixToText(int seconds) => DateTime.fromMillisecondsSinceEpoch(
+    seconds * 1000,
+    isUtc: true,
+  ).toIso8601String();
+
   static String messageFor(Object failure) {
+    if (failure is StateError) {
+      return failure.message;
+    }
     if (failure is! ServerException) {
       return PaymentKeyMessageHelper.messageFor(failure);
     }

@@ -4,8 +4,8 @@ import '../noise/hex_helper.dart';
 import 'lab_cheque_stub_helper.dart';
 
 /// Issuer trust anchor for receivers. Release builds read the operator values
-/// from `--dart-define` and fail closed; the public lab root is only for
-/// non-release builds.
+/// from `--dart-define` and fail closed; non-release builds can override the
+/// public lab root with the same define.
 class IssuerConfigHelper {
   IssuerConfigHelper._();
 
@@ -18,7 +18,9 @@ class IssuerConfigHelper {
     bool isRelease = kReleaseMode,
     String configuredHex = _rootHex,
   }) async {
-    if (!isRelease) return LabChequeStubHelper.issuerRootPublicKey();
+    if (!isRelease && configuredHex.isEmpty) {
+      return LabChequeStubHelper.issuerRootPublicKey();
+    }
     return _decode('ISSUER_ROOT_PUBLIC_KEY_HEX', configuredHex);
   }
 
