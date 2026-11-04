@@ -5,14 +5,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:meshpay/core/noise/hex_helper.dart';
 import 'package:meshpay/core/server/client/server_error_code.dart';
 import 'package:meshpay/core/server/client/server_exception.dart';
+import 'package:meshpay/core/server/codec/proto_writer_helper.dart';
 import 'package:meshpay/core/server/messages/cheque_stub.dart';
 import 'package:meshpay/core/server/messages/server_attestation_level.dart';
 import 'package:meshpay/core/server/requests/issue_request_body.dart';
 import 'package:meshpay/core/server/responses/issue_response.dart';
+import 'package:meshpay/core/server/responses/server_key_response.dart';
 import 'package:meshpay/core/server/signing/server_account_id_helper.dart';
 import 'package:meshpay/core/server/signing/server_signing_message_helper.dart';
+import 'package:meshpay/core/server/trust/server_trust_service.dart';
 import 'package:meshpay/features/lab/presentation/view_models/server_lab_view_model.dart';
+import 'package:protobuf/protobuf.dart';
 
+import '../../../../fakes/fake_app_support_directory_service.dart';
 import '../../../../fakes/fake_hardware_key_lab_service.dart';
 import '../../../../fakes/fake_payment_key_signer.dart';
 import '../../../../fakes/fake_server_client.dart';
@@ -25,6 +30,26 @@ final Uint8List _raw = Uint8List.fromList(<int>[
   ...List<int>.filled(31, 0),
   9,
 ]);
+
+final Uint8List _trustRoot = Uint8List.fromList(List<int>.filled(32, 3));
+final Uint8List _issuerKeyId = Uint8List.fromList(<int>[0xab, 0xcd]);
+
+Uint8List _certBytes() {
+  final body = CodedBufferWriter();
+  ProtoWriterHelper.bytes(body, 1, _issuerKeyId);
+  ProtoWriterHelper.uint64(body, 5, 1800000000);
+  final cert = CodedBufferWriter();
+  ProtoWriterHelper.bytes(cert, 1, body.toBuffer());
+  return Uint8List.fromList(cert.toBuffer());
+}
+
+Uint8List _snapshotBytes() {
+  final snapshot = CodedBufferWriter();
+  ProtoWriterHelper.uint64(snapshot, 2, 1700000000);
+  ProtoWriterHelper.bytes(snapshot, 9, <int>[1]);
+  ProtoWriterHelper.bytes(snapshot, 9, <int>[2]);
+  return Uint8List.fromList(snapshot.toBuffer());
+}
 
 const int _nowMillis = 1700000000000;
 
@@ -40,18 +65,27 @@ void main() {
   late FakeHardwareKeyLabService keys;
   late FakePaymentKeySigner signer;
   late ServerLabViewModel viewModel;
+  late Directory trustDir;
 
   setUp(() {
     client = FakeServerClient();
+    trustDir = Directory.systemTemp.createTempSync('lab_trust');
     keys = FakeHardwareKeyLabService();
     signer = FakePaymentKeySigner()..signature = _der;
     viewModel = ServerLabViewModel(
       client,
       keys,
       signer,
+      ServerTrustService(
+        client,
+        FakeAppSupportDirectoryService(trustDir.path),
+        pinnedRoot: () async => _trustRoot,
+      ),
       clock: () => DateTime.fromMillisecondsSinceEpoch(_nowMillis),
     );
   });
+
+  tearDown(() => trustDir.deleteSync(recursive: true));
 
   test(
     'attested register sends chain, server nonce and raw signature',
@@ -91,6 +125,13 @@ void main() {
     expect(request.attestationChain, isEmpty);
     expect(request.challenge, isEmpty);
     expect(request.attestationLevel, ServerAttestationLevel.labSoftware);
+  });
+
+  test('trustBaseUrl reports the URL used by the trust service', () {
+    viewModel.setBaseUrl('https://another-server.example');
+
+    expect(viewModel.baseUrl, 'https://another-server.example');
+    expect(viewModel.trustBaseUrl, ServerTrustService.labBaseUrl);
   });
 
   test('a refused registration shows the typed code, not peer text', () async {
@@ -242,9 +283,16 @@ void main() {
       ),
       reserveUnits: 1,
     );
+    client
+      ..serverKey = ServerKeyResponse(
+        rootPublicKey: _trustRoot,
+        issuerCert: _certBytes(),
+      )
+      ..snapshot = _snapshotBytes();
     await viewModel.register();
     await viewModel.issueChequebook();
     await viewModel.readBalance();
+    await viewModel.fetchTrust();
 
     viewModel.setBaseUrl('http://localhost:1');
 
@@ -253,6 +301,8 @@ void main() {
     expect(viewModel.chequebook, isNull);
     expect(viewModel.payerBalance, isNull);
     expect(viewModel.usedStubs, 0);
+    expect(viewModel.issuerCert, isNull);
+    expect(viewModel.snapshot, isNull);
   });
 
   test('register resets payee, last deposit and balances', () async {
@@ -268,6 +318,13 @@ void main() {
     await viewModel.issueChequebook();
     await viewModel.deposit();
     await viewModel.readBalance();
+    client
+      ..serverKey = ServerKeyResponse(
+        rootPublicKey: _trustRoot,
+        issuerCert: _certBytes(),
+      )
+      ..snapshot = _snapshotBytes();
+    await viewModel.fetchTrust();
     expect(viewModel.payee, isNotNull);
 
     await viewModel.register();
@@ -276,6 +333,8 @@ void main() {
     expect(viewModel.lastDeposit, isNull);
     expect(viewModel.payerBalance, isNull);
     expect(viewModel.payeeBalance, isNull);
+    expect(viewModel.issuerCert, isNull);
+    expect(viewModel.snapshot, isNull);
   });
 
   test('rejects an issue response with the wrong stub count', () async {
@@ -291,4 +350,57 @@ void main() {
     expect(viewModel.chequebook, isNull);
     expect(viewModel.error, contains('[malformedResponse]'));
   });
+
+  test(
+    'fetchTrust exposes issuer key id, expiry and snapshot summary',
+    () async {
+      client
+        ..serverKey = ServerKeyResponse(
+          rootPublicKey: _trustRoot,
+          issuerCert: _certBytes(),
+        )
+        ..snapshot = _snapshotBytes();
+
+      await viewModel.fetchTrust();
+
+      expect(viewModel.error, isNull);
+      expect(HexHelper.encode(viewModel.issuerCert!.keyId), 'abcd');
+      expect(viewModel.issuerCert!.notAfterUnix, 1800000000);
+      expect(viewModel.snapshot!.issuedAtUnix, 1700000000);
+      expect(viewModel.snapshot!.revokedServerKeyCount, 2);
+    },
+  );
+
+  test('fetchTrust reports a root mismatch in error', () async {
+    client.serverKey = ServerKeyResponse(
+      rootPublicKey: Uint8List.fromList(List<int>.filled(32, 9)),
+      issuerCert: _certBytes(),
+    );
+
+    await viewModel.fetchTrust();
+
+    expect(viewModel.error, contains('does not match the pinned root'));
+    expect(viewModel.issuerCert, isNull);
+  });
+
+  test(
+    'fetchTrust clears previous summaries when the snapshot is unavailable',
+    () async {
+      client
+        ..serverKey = ServerKeyResponse(
+          rootPublicKey: _trustRoot,
+          issuerCert: _certBytes(),
+        )
+        ..snapshot = _snapshotBytes();
+      await viewModel.fetchTrust();
+      expect(viewModel.issuerCert, isNotNull);
+      expect(viewModel.snapshot, isNotNull);
+
+      client.trustError = const ServerException(ServerErrorCode.unreachable);
+      await viewModel.fetchTrust();
+
+      expect(viewModel.issuerCert, isNull);
+      expect(viewModel.snapshot, isNull);
+    },
+  );
 }

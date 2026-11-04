@@ -4,6 +4,7 @@ import '../../core/keys/hardware_key_lab_service.dart';
 import '../../core/keys/payment_key_signer.dart';
 import '../../core/routes/app_routes.dart';
 import '../../core/server/client/server_client.dart';
+import '../../core/server/trust/server_trust_service.dart';
 import 'presentation/pages/bluetooth_lab_page.dart';
 import 'presentation/pages/channel_lab_page.dart';
 import 'presentation/pages/clock_lab_page.dart';
@@ -85,7 +86,8 @@ final labModule = createModule(
               ServerClient client,
               HardwareKeyLabService keys,
               PaymentKeySigner signer,
-            ) => ServerLabViewModel(client, keys, signer),
+              ServerTrustService trust,
+            ) => ServerLabViewModel(client, keys, signer, trust),
           );
         },
         child: (_, _) => const ServerLabPage(),
