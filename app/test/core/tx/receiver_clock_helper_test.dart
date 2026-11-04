@@ -1,5 +1,4 @@
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meshpay/core/tx/external_tx_signing_helper.dart';
 import 'package:meshpay/core/tx/receiver_clock_helper.dart';
@@ -65,21 +64,69 @@ void main() {
     ]);
   });
 
-  test('a failing installSnapshot escapes prepare as the raw error', () async {
+  test('a refused held snapshot is logged and does not fail prepare', () async {
     dtn.snapshot = Uint8List.fromList(<int>[9]);
     engine.installError = StateError('snapshot_rejected');
+    final messages = <String>[];
+    final previousDebugPrint = debugPrint;
+    debugPrint = (String? message, {int? wrapWidth}) {
+      if (message != null) messages.add(message);
+    };
+    addTearDown(() => debugPrint = previousDebugPrint);
 
-    await expectLater(
-      ReceiverClockHelper.prepare(engine: engine, dtn: dtn, native: native),
-      throwsA(
-        isA<StateError>().having(
-          (e) => e.message,
-          'message',
-          'snapshot_rejected',
-        ),
-      ),
+    final sample = await ReceiverClockHelper.prepare(
+      engine: engine,
+      dtn: dtn,
+      native: native,
     );
+
+    expect(sample.elapsedRealtimeNanos, 42);
+    expect(engine.calls, <String>['installSnapshot']);
+    expect(engine.installed, isNull);
+    expect(messages, <String>['server snapshot refused: StateError']);
   });
+
+  test(
+    'an out-of-window held snapshot is logged before core refuses the propose',
+    () async {
+      dtn.snapshot = Uint8List.fromList(<int>[9]);
+      final engine = _NoClockAnchorEngine(calls)
+        ..installError = StateError('snapshot issued_at outside cert window');
+      final messages = <String>[];
+      final previousDebugPrint = debugPrint;
+      debugPrint = (String? message, {int? wrapWidth}) {
+        if (message != null) messages.add(message);
+      };
+      addTearDown(() => debugPrint = previousDebugPrint);
+
+      final sample = await ReceiverClockHelper.prepare(
+        engine: engine,
+        dtn: dtn,
+        native: native,
+      );
+
+      await expectLater(
+        ExternalTxSigningHelper.acknowledge(
+          engine: engine,
+          signer: FakePaymentKeySigner(),
+          alias: 'lab_receiver',
+          propose: Uint8List.fromList(<int>[1]),
+          clock: sample,
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            'no revocation snapshot',
+          ),
+        ),
+      );
+
+      expect(engine.calls, <String>['installSnapshot', 'storePropose']);
+      expect(engine.installed, isNull);
+      expect(messages, <String>['server snapshot refused: StateError']);
+    },
+  );
 
   test('the snapshot is installed before the propose is stored with the '
       'same clock reading', () async {
@@ -111,4 +158,18 @@ void main() {
       BigInt.from(7),
     ]);
   });
+}
+
+class _NoClockAnchorEngine extends FakeExternalReceiverEngine {
+  _NoClockAnchorEngine(super.calls);
+
+  @override
+  Future<Uint8List> storePropose({
+    required List<int> propose,
+    required BigInt monotonicNanos,
+    BigInt? bootCount,
+  }) async {
+    calls.add('storePropose');
+    throw StateError('no revocation snapshot');
+  }
 }
