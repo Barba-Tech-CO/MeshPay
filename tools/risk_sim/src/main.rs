@@ -1,7 +1,17 @@
-use risk_sim::{Arrival, Detect, LEVELS, N_MAX, PROFILES, Params, Profile, Stats, Strategy, run};
+use risk_sim::{
+  Arrival, Detect, LEVELS, N_MAX, PROFILES, Params, Profile, Stats, Strategy, prd_loss, run,
+};
+
+/// Placeholder defaults, NOT owner-selected values: the PRD 5.4 Moderate profile with m = 1.
+const PLACEHOLDER_R: f64 = 100.0;
+const PLACEHOLDER_F: f64 = 20.0;
+const PLACEHOLDER_E_H: f64 = 72.0;
+const PLACEHOLDER_M: f64 = 1.0;
 
 const USAGE: &str = "usage: risk_sim [--runs N] [--seed S] [--arrival fixed|poisson] \
-[--detect never|fixed:H|exp:H] [--bug-rate P]";
+[--detect never|fixed:H|exp:H] [--bug-rate P] \
+[--r R] [--f F] [--e H] [--m M]\n\
+--r/--f/--e/--m default to PLACEHOLDERS (PRD 5.4 Moderate, m=1), not owner-selected values";
 
 struct Args {
   runs: usize,
@@ -9,6 +19,10 @@ struct Args {
   arrival: Arrival,
   detect: Detect,
   bug_rate: f64,
+  reserve: f64,
+  cheque: f64,
+  validity_h: f64,
+  m: f64,
 }
 
 fn parse() -> Result<Args, String> {
@@ -18,6 +32,10 @@ fn parse() -> Result<Args, String> {
     arrival: Arrival::Fixed,
     detect: Detect::Never,
     bug_rate: 0.05,
+    reserve: PLACEHOLDER_R,
+    cheque: PLACEHOLDER_F,
+    validity_h: PLACEHOLDER_E_H,
+    m: PLACEHOLDER_M,
   };
   let mut it = std::env::args().skip(1);
   while let Some(flag) = it.next() {
@@ -27,6 +45,10 @@ fn parse() -> Result<Args, String> {
       "--runs" => a.runs = v.parse().map_err(|e| bad(&e))?,
       "--seed" => a.seed = v.parse().map_err(|e| bad(&e))?,
       "--bug-rate" => a.bug_rate = v.parse().map_err(|e| bad(&e))?,
+      "--r" | "--reserve" => a.reserve = v.parse().map_err(|e| bad(&e))?,
+      "--f" | "--cheque" => a.cheque = v.parse().map_err(|e| bad(&e))?,
+      "--e" | "--validity" => a.validity_h = v.parse().map_err(|e| bad(&e))?,
+      "--m" | "--multiplier" => a.m = v.parse().map_err(|e| bad(&e))?,
       "--arrival" => {
         a.arrival = match v.as_str() {
           "fixed" => Arrival::Fixed,
@@ -47,6 +69,18 @@ fn parse() -> Result<Args, String> {
   }
   if a.runs == 0 {
     return Err(format!("--runs must be > 0\n{USAGE}"));
+  }
+  if !(a.reserve.is_finite()
+    && a.reserve > 0.0
+    && a.cheque.is_finite()
+    && a.cheque > 0.0
+    && a.validity_h.is_finite()
+    && a.validity_h > 0.0)
+  {
+    return Err(format!("R, f and E must be finite and > 0\n{USAGE}"));
+  }
+  if !(a.m.is_finite() && (0.0..=1.0).contains(&a.m)) {
+    return Err(format!("--m must be in [0, 1]\n{USAGE}"));
   }
   Ok(a)
 }
@@ -86,6 +120,35 @@ fn main() {
       a.seed,
     )
   };
+  let selected = Profile {
+    name: "args",
+    reserve: a.reserve,
+    cheque: a.cheque,
+    validity_h: a.validity_h,
+  };
+  println!(
+    "\n== R/f/E/m from args (defaults are placeholders, NOT owner-selected): \
+R={} f={} E={} h m={} | formula column is the fixed-arrival/no-detection PRD value ==",
+    a.reserve, a.cheque, a.validity_h, a.m
+  );
+  println!(
+    "{:<16} | {:>26} | {:>12}",
+    "strategy", "mean/p95/max (n runs)", "PRD formula"
+  );
+  for (name, strategy) in strategies {
+    let p = Params {
+      profile: selected,
+      m: a.m,
+      arrival: a.arrival,
+      detect: a.detect,
+      strategy,
+    };
+    println!(
+      "{name:<16} | {} | {:>12.1}",
+      fmt(&at(selected, a.m, strategy)),
+      prd_loss(&p)
+    );
+  }
   for (level, m) in LEVELS {
     println!("\n== {level} ==");
     print!("{:<13}", "profile");
