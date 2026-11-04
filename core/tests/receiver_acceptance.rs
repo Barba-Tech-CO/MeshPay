@@ -476,3 +476,34 @@ fn bridge_installed_snapshot_revokes_the_issuer_key() {
     Err("stub issued by a revoked server key".to_owned())
   );
 }
+
+#[test]
+fn bridge_same_issued_at_snapshot_installs_the_revoked_list() {
+  let directory = tempfile::tempdir().unwrap();
+  let pair = Pair::new();
+  let receiver = ReceiverTxEngine::open(
+    directory.path().join("r.db").to_string_lossy().into_owned(),
+    DB_KEY.to_vec(),
+    PAYEE_SEED.to_vec(),
+    compressed_public_key(&signing_key_from_seed(&PAYER_SEED).unwrap()),
+    OWN_ACCOUNT.to_vec(),
+    support::snapshot_public_key(),
+    E,
+    support::issuer_root_public_key(),
+    support::issuer_cert(),
+  )
+  .unwrap();
+  assert_eq!(
+    receiver.install_snapshot(support::signed_snapshot(T_SRV), 10 * SECOND, Some(1)),
+    Ok(T_SRV)
+  );
+  let revoking = support::signed_snapshot_revoking(T_SRV, 2, vec![support::issuer_key_id()]);
+  assert_eq!(
+    receiver.install_snapshot(revoking, 10 * SECOND, Some(1)),
+    Ok(T_SRV)
+  );
+  assert_eq!(
+    receiver.on_propose(pair.propose(1, T_SRV + 3600), 20 * SECOND, Some(1)),
+    Err("stub issued by a revoked server key".to_owned())
+  );
+}
