@@ -661,7 +661,8 @@ impl ReceiverTxEngine {
     monotonic_nanos: u64,
     boot_count: Option<u64>,
   ) -> Result<u64, String> {
-    let issued_at = verify_snapshot(&snapshot, &self.snapshot_key)?.issued_at_unix;
+    let verified = verify_snapshot(&snapshot, &self.snapshot_key)?;
+    let issued_at = verified.issued_at_unix;
     if issued_at > MAX_STORED_UNIX {
       return Err("snapshot issued_at out of range".to_owned());
     }
@@ -680,14 +681,17 @@ impl ReceiverTxEngine {
       },
       None => issued_at,
     };
-    self.engine.save_clock(&ReceiverClockRow {
-      t_srv_unix: issued_at,
-      anchor_unix: issued_at,
-      monotonic_nanos,
-      boot_count,
-      max_now_unix,
-      rebooted: false,
-    })?;
+    self.engine.save_clock_with_revoked_keys(
+      &ReceiverClockRow {
+        t_srv_unix: issued_at,
+        anchor_unix: issued_at,
+        monotonic_nanos,
+        boot_count,
+        max_now_unix,
+        rebooted: false,
+      },
+      &verified.revoked_server_key_ids,
+    )?;
     Ok(issued_at)
   }
 

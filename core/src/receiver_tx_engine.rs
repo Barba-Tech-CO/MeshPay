@@ -41,6 +41,9 @@ CREATE TABLE IF NOT EXISTS receiver_clock (
   boot_count INTEGER,
   max_now_unix INTEGER NOT NULL,
   rebooted INTEGER NOT NULL CHECK (rebooted IN (0, 1))
+) STRICT;
+CREATE TABLE IF NOT EXISTS receiver_revoked_server_keys (
+  key_id BLOB PRIMARY KEY
 ) STRICT;"
 }
 
@@ -163,8 +166,6 @@ impl ReceiverEngine {
     if body.tx_id != tx_id {
       return Err("tx_id does not match counter and content".to_owned());
     }
-    // ponytail: revoked_server_key_ids of the snapshot not checked; the receiver keeps only the
-    // snapshot's issued_at. Persist the revoked list with the clock row when the kill switch lands.
     let stub_body = self.issuer.verify_stub(&stub)?;
     if stub_body.cheque_id != body.cheque_id {
       return Err("stub names a different cheque".to_owned());
@@ -197,6 +198,16 @@ impl ReceiverEngine {
       } else {
         Err("tx_id or cheque already stored with different content".to_owned())
       };
+    }
+    let revoked: bool = transaction
+      .query_row(
+        "SELECT EXISTS (SELECT 1 FROM receiver_revoked_server_keys WHERE key_id = ?1)",
+        params![stub_body.server_key_id],
+        |row| row.get(0),
+      )
+      .map_err(sql_error)?;
+    if revoked {
+      return Err("stub issued by a revoked server key".to_owned());
     }
     self.issuer.check_current(context.now.unix)?;
     ChequeAcceptance::check(
@@ -332,8 +343,52 @@ impl ReceiverEngine {
   /// with a lower `max_now` or a cleared reboot flag), so two engines on one file cannot lose
   /// each other's updates.
   pub fn save_clock(&self, clock: &ReceiverClockRow) -> Result<(), String> {
-    self
-      .connection()?
+    Self::upsert_clock(&*self.connection()?, clock)
+  }
+
+  /// `save_clock` plus the `revoked_server_key_ids` of the snapshot being installed. The list is
+  /// replaced, in the same transaction, only when `clock.t_srv_unix` is not older than the
+  /// held one (or none is held), so an older snapshot never un-revokes a key.
+  pub fn save_clock_with_revoked_keys(
+    &self,
+    clock: &ReceiverClockRow,
+    revoked_server_key_ids: &[Vec<u8>],
+  ) -> Result<(), String> {
+    if revoked_server_key_ids.iter().any(|id| id.len() != 16) {
+      return Err("revoked server key id must be 16 bytes".to_owned());
+    }
+    let mut connection = self.connection()?;
+    let transaction = connection
+      .transaction_with_behavior(TransactionBehavior::Immediate)
+      .map_err(sql_error)?;
+    let held: Option<i64> = transaction
+      .query_row(
+        "SELECT t_srv_unix FROM receiver_clock WHERE id = 1",
+        [],
+        |row| row.get(0),
+      )
+      .optional()
+      .map_err(sql_error)?;
+    let newer = held.is_none_or(|held| to_sql_integer(clock.t_srv_unix).is_ok_and(|t| t >= held));
+    Self::upsert_clock(&transaction, clock)?;
+    if newer {
+      transaction
+        .execute("DELETE FROM receiver_revoked_server_keys", [])
+        .map_err(sql_error)?;
+      for key_id in revoked_server_key_ids {
+        transaction
+          .execute(
+            "INSERT OR IGNORE INTO receiver_revoked_server_keys (key_id) VALUES (?1)",
+            params![key_id],
+          )
+          .map_err(sql_error)?;
+      }
+    }
+    transaction.commit().map_err(sql_error)
+  }
+
+  fn upsert_clock(connection: &Connection, clock: &ReceiverClockRow) -> Result<(), String> {
+    connection
       .execute(
         "INSERT INTO receiver_clock (id, t_srv_unix, anchor_unix, monotonic_nanos, boot_count, max_now_unix, rebooted) VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6)
          ON CONFLICT (id) DO UPDATE SET t_srv_unix = excluded.t_srv_unix, anchor_unix = excluded.anchor_unix, monotonic_nanos = excluded.monotonic_nanos, boot_count = excluded.boot_count, max_now_unix = excluded.max_now_unix, rebooted = excluded.rebooted
