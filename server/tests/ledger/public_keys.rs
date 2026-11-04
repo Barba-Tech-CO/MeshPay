@@ -66,17 +66,31 @@ async fn revocation_snapshot_is_signed_by_the_snapshot_key_and_lists_revocations
 }
 
 #[tokio::test]
-async fn each_public_read_has_its_own_limit() {
+async fn cached_public_reads_never_429_but_a_snapshot_rebuild_beyond_the_limit_does() {
   let Some(app) = setup_with(|config| config.public_read_limit_per_minute = 1).await else {
     return;
   };
-  for path in ["/v1/server-key", "/v1/revocation-snapshot"] {
-    assert_eq!(app.call("GET", path, Vec::new()).await.0, StatusCode::OK);
+  for _ in 0..5 {
     assert_eq!(
-      app.call("GET", path, Vec::new()).await.0,
-      StatusCode::TOO_MANY_REQUESTS
+      app.call("GET", "/v1/server-key", Vec::new()).await.0,
+      StatusCode::OK
+    );
+    assert_eq!(
+      app
+        .call("GET", "/v1/revocation-snapshot", Vec::new())
+        .await
+        .0,
+      StatusCode::OK
     );
   }
+  tokio::time::sleep(std::time::Duration::from_millis(1_100)).await;
+  assert_eq!(
+    app
+      .call("GET", "/v1/revocation-snapshot", Vec::new())
+      .await
+      .0,
+    StatusCode::TOO_MANY_REQUESTS
+  );
 }
 
 #[tokio::test]
