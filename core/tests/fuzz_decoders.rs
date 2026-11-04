@@ -192,6 +192,7 @@ fn pair() -> Pair {
     &PAYEE_SEED,
     &public_key(&PAYER_SEED),
     ACCOUNT,
+    support::issuer_trust(),
   )
   .unwrap();
   let body = ChequeSpendBody {

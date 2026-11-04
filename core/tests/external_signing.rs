@@ -102,6 +102,7 @@ impl Lab {
       &self.payee.public_key(),
       &self.payer.public_key(),
       OWN_ACCOUNT,
+      support::issuer_trust(),
     )
     .expect("open receiver")
   }
@@ -505,6 +506,8 @@ fn dart_facing_api_runs_the_external_exchange() {
     OWN_ACCOUNT.to_vec(),
     support::snapshot_public_key(),
     support::E,
+    support::issuer_root_public_key(),
+    support::issuer_cert(),
   )
   .unwrap();
   receiver
@@ -803,8 +806,15 @@ fn compressed_key_is_accepted_and_identity_or_off_curve_keys_are_refused() {
       "payer accepted {name} own key"
     );
     assert!(
-      ReceiverEngine::open_external(&path, &DB_KEY, &key, &lab.payer.public_key(), OWN_ACCOUNT)
-        .is_err(),
+      ReceiverEngine::open_external(
+        &path,
+        &DB_KEY,
+        &key,
+        &lab.payer.public_key(),
+        OWN_ACCOUNT,
+        support::issuer_trust()
+      )
+      .is_err(),
       "receiver accepted {name} own key"
     );
   }
@@ -914,6 +924,7 @@ fn child_finish_ack_loop() {
     &lab.payee.public_key(),
     &lab.payer.public_key(),
     OWN_ACCOUNT,
+    support::issuer_trust(),
   )
   .unwrap();
   println!("ready");
