@@ -25,7 +25,6 @@ pub struct AppState {
   pub register_limiter: Arc<RegisterLimiter>,
   pub challenge_limiter: Arc<RegisterLimiter>,
   pub control_limiter: Arc<RegisterLimiter>,
-  pub server_key_limiter: Arc<RegisterLimiter>,
   pub snapshot_limiter: Arc<RegisterLimiter>,
   /// Encoded `ServerKeyResponse`, fixed for the process lifetime.
   pub server_key_response: Bytes,
@@ -83,7 +82,6 @@ impl AppState {
     .encode_to_vec()
     .into();
     Ok(Self {
-      server_key_limiter: Arc::new(RegisterLimiter::new()),
       snapshot_limiter: Arc::new(RegisterLimiter::new()),
       server_key_response,
       snapshot_cache: Arc::new(Mutex::new(None)),
