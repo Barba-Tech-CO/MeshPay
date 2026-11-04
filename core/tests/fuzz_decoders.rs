@@ -3,7 +3,7 @@
 //! (DtnEngine::ingest_snapshot / verify_snapshot), TxPropose (ReceiverEngine::on_propose),
 //! AckReceipt (PayerEngine::on_ack), ChequeSpendBody (derive_tx_id and the receiver).
 //! Not in core: RedeemRequest, RecoveryCert (server-side only).
-//! Case count: env PROPTEST_CASES (default 64).
+//! Case count: MESHPAY_FUZZ_CASES (default 1,000; set to 1,000,000 for the full PRD corpus).
 mod support;
 
 use meshpay_core::dtn_buffer::DtnEngine;
@@ -34,10 +34,14 @@ const PAYEE_SEED: [u8; 32] = [9; 32];
 const ACCOUNT: &[u8] = b"payee-account";
 
 fn runner() -> TestRunner {
-  let cases = std::env::var("PROPTEST_CASES")
-    .ok()
-    .and_then(|value| value.parse().ok())
-    .unwrap_or(64);
+  let cases = match std::env::var("MESHPAY_FUZZ_CASES") {
+    Ok(value) => value
+      .parse()
+      .expect("MESHPAY_FUZZ_CASES must be a positive integer"),
+    Err(std::env::VarError::NotPresent) => 1_000,
+    Err(error) => panic!("MESHPAY_FUZZ_CASES is unavailable: {error}"),
+  };
+  assert!(cases > 0, "MESHPAY_FUZZ_CASES must be positive");
   TestRunner::new(Config {
     cases,
     failure_persistence: None,

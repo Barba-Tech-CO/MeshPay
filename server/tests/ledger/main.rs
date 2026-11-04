@@ -8,6 +8,7 @@ mod cases;
 mod deposit_race;
 mod deposit_throughput;
 mod equivocation_independent;
+mod expiry_simulated;
 mod fuzz_deposit;
 mod independent_verifier;
 mod public_keys;

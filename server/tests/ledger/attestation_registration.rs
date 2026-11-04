@@ -9,6 +9,7 @@ use meshpay_server::wire::challenge_response::ChallengeResponse;
 use prost::Message;
 
 const REFUSED: &[u8] = b"registration refused";
+type BootCase = (&'static str, fn(&mut KeySpec));
 
 async fn attest_app(tweak: impl FnOnce(&mut AppConfig)) -> Option<(TestApp, Pki)> {
   let pki = Pki::new();
@@ -64,6 +65,20 @@ async fn level(app: &TestApp, client: &Client) -> Option<String> {
     .fetch_optional(&app.pool)
     .await
     .unwrap()
+}
+
+async fn account_rows(app: &TestApp, account_id: &[u8]) -> (i64, i64, i64, i64, i64) {
+  sqlx::query_as(
+    "SELECT (SELECT count(*) FROM accounts WHERE account_id = $1),
+            (SELECT count(*) FROM balances WHERE account_id = $1),
+            (SELECT count(*) FROM ledger_entries WHERE account_id = $1),
+            (SELECT count(*) FROM chequebooks WHERE account_id = $1),
+            (SELECT count(*) FROM cheques WHERE account_id = $1)",
+  )
+  .bind(account_id)
+  .fetch_one(&app.owner_pool)
+  .await
+  .unwrap()
 }
 
 async fn register_ok(app: &TestApp, pki: &Pki, spec: impl Fn(&[u8]) -> KeySpec) -> Client {
@@ -214,6 +229,85 @@ async fn every_refusal_is_the_same_403_and_creates_nothing() {
     .call("POST", "/v1/accounts", plain.encode_to_vec())
     .await;
   assert_eq!((status, body.as_slice()), (StatusCode::FORBIDDEN, REFUSED));
+}
+
+#[tokio::test]
+// PV-SEC-01: repeated invalid attestations have one refusal response and create no account rows.
+async fn twenty_failed_registrations_for_one_key_have_the_same_403_and_create_nothing() {
+  let Some((app, pki)) = attest_app(|_| {}).await else {
+    return;
+  };
+  let client = Client::new();
+
+  for attempt in 0..20 {
+    let challenge = nonce(&app).await;
+    let mut wrong_challenge = random_bytes(32);
+    if wrong_challenge == challenge {
+      wrong_challenge[0] ^= 1;
+    }
+    let chain = pki.valid_chain(
+      &client.verifying_key(),
+      &KeySpec::strongbox(&wrong_challenge),
+    );
+    let (status, body) = register(&app, &client, chain, challenge).await;
+    assert_eq!(
+      (status, body.as_slice()),
+      (StatusCode::FORBIDDEN, REFUSED),
+      "attempt {attempt}"
+    );
+    assert_eq!(
+      account_rows(&app, &client.account_id).await,
+      (0, 0, 0, 0, 0),
+      "attempt {attempt}"
+    );
+  }
+}
+
+#[tokio::test]
+// PV-SIL-02: each rejected boot-state chain fails registration and cannot issue a chequebook.
+async fn every_invalid_boot_state_refuses_registration_and_issuance() {
+  let Some((app, pki)) = attest_app(|_| {}).await else {
+    return;
+  };
+  let valid_boot = register_ok(&app, &pki, KeySpec::strongbox).await;
+  assert_eq!(level(&app, &valid_boot).await.as_deref(), Some("strongbox"));
+
+  let cases: [BootCase; 5] = [
+    ("device unlocked", |spec| spec.boot = Some((false, 0))),
+    ("self-signed boot", |spec| spec.boot = Some((true, 1))),
+    ("unverified boot", |spec| spec.boot = Some((true, 2))),
+    ("failed boot", |spec| spec.boot = Some((true, 3))),
+    ("missing root of trust", |spec| spec.boot = None),
+  ];
+
+  for (name, change_boot) in cases {
+    let client = Client::new();
+    let challenge = nonce(&app).await;
+    let mut spec = KeySpec::strongbox(&challenge);
+    change_boot(&mut spec);
+    let chain = pki.valid_chain(&client.verifying_key(), &spec);
+
+    let (status, body) = register(&app, &client, chain, challenge).await;
+    assert_eq!(
+      (status, body.as_slice()),
+      (StatusCode::FORBIDDEN, REFUSED),
+      "{name}"
+    );
+    assert_eq!(
+      account_rows(&app, &client.account_id).await,
+      (0, 0, 0, 0, 0),
+      "{name}"
+    );
+
+    let (status, response) = client.issue(&app, random_bytes(16), 1, 100, 60).await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{name}");
+    assert!(response.is_none(), "{name}");
+    assert_eq!(
+      account_rows(&app, &client.account_id).await,
+      (0, 0, 0, 0, 0),
+      "{name}"
+    );
+  }
 }
 
 #[tokio::test]

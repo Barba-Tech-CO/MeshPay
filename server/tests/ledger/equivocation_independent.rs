@@ -1,5 +1,6 @@
-//! PV-LED-02 / PV-CRIP-01: double deposits of one cheque yield a proof an independent verifier
-//! accepts. The 10,000-sequence honest test is fixed; `MESHPAY_EQUIVOCATION_ROUNDS` controls only server-round tests (default 100).
+//! PV-LED-02 / PV-CRIP-01: default 100 conflict proofs; set
+//! `MESHPAY_EQUIVOCATION_ROUNDS=1000` for the full PRD scale. The 10,000-sequence honest test is
+//! fixed.
 use crate::independent_verifier::IndependentVerifier;
 use crate::support::{Client, random_bytes, setup};
 use meshpay_server::crypto::p256_keys::{

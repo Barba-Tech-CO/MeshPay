@@ -129,6 +129,32 @@ fn handshake_messages_with_empty_payload_have_expected_sizes() {
   assert!(initiator.is_finished() && responder.is_finished());
 }
 
+/// Pins the PRD QR payload format (session ID present; no MAC/address field). No production QR
+/// builder exists yet, so the PV-BLE-05 content check on real output remains open until it does.
+#[test]
+fn qr_bootstrap_contains_a_session_id_and_no_device_address_fields() {
+  let query = std::str::from_utf8(PROLOGUE)
+    .unwrap()
+    .strip_prefix("meshpay://charge?")
+    .expect("charge QR URI");
+  let fields: Vec<_> = query
+    .split('&')
+    .map(|field| field.split_once('=').expect("query key and value"))
+    .collect();
+  let session_ids: Vec<_> = fields
+    .iter()
+    .filter(|(name, value)| *name == "sid" && !value.is_empty())
+    .collect();
+
+  assert_eq!(session_ids.len(), 1);
+  assert!(
+    fields
+      .iter()
+      .all(|(name, _)| { !name.contains("mac") && !name.contains("address") && *name != "addr" }),
+    "QR fields must not expose a device address"
+  );
+}
+
 #[test]
 fn flipping_any_prologue_byte_on_responder_fails_handshake() {
   let mut failures = 0;

@@ -1,5 +1,5 @@
-//! PV-SEC-04: concurrent deposits of one cheque_id. Rounds: env `MESHPAY_RACE_ROUNDS`
-//! (default 1000; override for local timing with `MESHPAY_RACE_ROUNDS`).
+//! PV-LED-02 / PV-SEC-04: concurrent deposits of one cheque_id. `MESHPAY_RACE_ROUNDS`
+//! defaults to 1,000 (PRD scale); override for faster local runs.
 use crate::support::{Client, TestApp, random_bytes, setup};
 use meshpay_server::wire::cheque_spend::ChequeSpend;
 use meshpay_server::wire::cheque_stub::ChequeStub;
