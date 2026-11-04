@@ -12,6 +12,7 @@ import '../responses/challenge_response.dart';
 import '../responses/deposit_response.dart';
 import '../responses/issue_response.dart';
 import '../responses/register_response.dart';
+import '../responses/server_key_response.dart';
 import 'server_base_url_helper.dart';
 import 'server_client.dart';
 import 'server_error_code.dart';
@@ -78,6 +79,16 @@ class DioServerClient implements ServerClient {
     ),
     BalanceResponse.fromBytes,
   );
+
+  @override
+  Future<ServerKeyResponse> getServerKey(String baseUrl) async => _decode(
+    await _send('GET', baseUrl + ApiRoutes.serverKey),
+    ServerKeyResponse.fromBytes,
+  );
+
+  @override
+  Future<Uint8List> getRevocationSnapshot(String baseUrl) =>
+      _send('GET', baseUrl + ApiRoutes.revocationSnapshot);
 
   Future<Uint8List> _send(
     String method,

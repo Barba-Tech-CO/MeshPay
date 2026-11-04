@@ -5,6 +5,7 @@ import 'package:meshpay_core/meshpay_core.dart';
 import '../ble/native_lab_service.dart';
 import '../dtn/dtn_buffer_service.dart';
 import '../dtn/lab_dtn_snapshot_key_helper.dart';
+import '../server/trust/server_trust_service.dart';
 import '../storage/app_support_directory_service.dart';
 import 'issuer_config_helper.dart';
 import 'lab_cheque_stub_helper.dart';
@@ -13,13 +14,19 @@ import 'receiver_clock_helper.dart';
 import 'receiver_tx_engine_service.dart';
 
 class MeshpayCoreReceiverTxEngineService implements ReceiverTxEngineService {
-  MeshpayCoreReceiverTxEngineService(this._directory, this._dtn, this._native);
+  MeshpayCoreReceiverTxEngineService(
+    this._directory,
+    this._dtn,
+    this._native,
+    this._trust,
+  );
 
   static const String _side = 'receiver';
 
   final AppSupportDirectoryService _directory;
   final DtnBufferService _dtn;
   final NativeLabService _native;
+  final ServerTrustService _trust;
   ReceiverTxEngine? _engine;
 
   @override
@@ -39,7 +46,7 @@ class MeshpayCoreReceiverTxEngineService implements ReceiverTxEngineService {
       snapshotPublicKey: LabDtnSnapshotKeyHelper.publicKey(),
       expirySecs: BigInt.from(LabChequeStubHelper.expirySeconds),
       issuerRootPublicKey: await IssuerConfigHelper.rootPublicKey(),
-      issuerCert: await IssuerConfigHelper.cert(),
+      issuerCert: await IssuerConfigHelper.cert(fetch: _trust.issuerCert),
     );
   }
 
@@ -50,6 +57,7 @@ class MeshpayCoreReceiverTxEngineService implements ReceiverTxEngineService {
       engine: engine,
       dtn: _dtn,
       native: _native,
+      trust: _trust,
     );
     return engine.onPropose(
       propose: propose,

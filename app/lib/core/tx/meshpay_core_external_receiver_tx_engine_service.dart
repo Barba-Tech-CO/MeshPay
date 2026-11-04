@@ -7,6 +7,7 @@ import '../dtn/dtn_buffer_service.dart';
 import '../dtn/lab_dtn_snapshot_key_helper.dart';
 import '../keys/payment_key_identity.dart';
 import '../keys/payment_key_signer.dart';
+import '../server/trust/server_trust_service.dart';
 import '../storage/app_support_directory_service.dart';
 import 'external_tx_signing_helper.dart';
 import 'issuer_config_helper.dart';
@@ -23,6 +24,7 @@ class MeshpayCoreExternalReceiverTxEngineService
     this._signer,
     this._dtn,
     this._native,
+    this._trust,
   );
 
   static const String _alias = 'lab_receiver';
@@ -32,6 +34,7 @@ class MeshpayCoreExternalReceiverTxEngineService
   final PaymentKeySigner _signer;
   final DtnBufferService _dtn;
   final NativeLabService _native;
+  final ServerTrustService _trust;
   ReceiverTxEngine? _engine;
 
   @override
@@ -51,7 +54,7 @@ class MeshpayCoreExternalReceiverTxEngineService
       snapshotPublicKey: LabDtnSnapshotKeyHelper.publicKey(),
       expirySecs: BigInt.from(LabChequeStubHelper.expirySeconds),
       issuerRootPublicKey: await IssuerConfigHelper.rootPublicKey(),
-      issuerCert: await IssuerConfigHelper.cert(),
+      issuerCert: await IssuerConfigHelper.cert(fetch: _trust.issuerCert),
     );
   }
 
@@ -67,6 +70,7 @@ class MeshpayCoreExternalReceiverTxEngineService
         engine: engine,
         dtn: _dtn,
         native: _native,
+        trust: _trust,
       ),
     );
   }

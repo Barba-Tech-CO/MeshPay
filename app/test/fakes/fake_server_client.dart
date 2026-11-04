@@ -10,6 +10,7 @@ import 'package:meshpay/core/server/responses/challenge_response.dart';
 import 'package:meshpay/core/server/responses/deposit_response.dart';
 import 'package:meshpay/core/server/responses/issue_response.dart';
 import 'package:meshpay/core/server/responses/register_response.dart';
+import 'package:meshpay/core/server/responses/server_key_response.dart';
 import 'package:meshpay/core/server/signing/server_account_id_helper.dart';
 
 class FakeServerClient implements ServerClient {
@@ -21,6 +22,9 @@ class FakeServerClient implements ServerClient {
   IssueResponse? issueResponse;
   Object? registerError;
   Uint8List? accountIdOverride;
+  ServerKeyResponse? serverKey;
+  Uint8List? snapshot;
+  Object? trustError;
 
   @override
   Future<ChallengeResponse> getChallenge(String baseUrl) async {
@@ -84,5 +88,23 @@ class FakeServerClient implements ServerClient {
       reservedUnits: 0,
       frozen: false,
     );
+  }
+
+  @override
+  Future<ServerKeyResponse> getServerKey(String baseUrl) async {
+    calls.add('serverKey');
+    if (trustError case final error?) {
+      throw error;
+    }
+    return serverKey!;
+  }
+
+  @override
+  Future<Uint8List> getRevocationSnapshot(String baseUrl) async {
+    calls.add('snapshot');
+    if (trustError case final error?) {
+      throw error;
+    }
+    return snapshot!;
   }
 }

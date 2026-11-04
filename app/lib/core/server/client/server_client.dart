@@ -8,6 +8,7 @@ import '../responses/challenge_response.dart';
 import '../responses/deposit_response.dart';
 import '../responses/issue_response.dart';
 import '../responses/register_response.dart';
+import '../responses/server_key_response.dart';
 
 /// Ledger server API. Failures throw `ServerException`.
 abstract interface class ServerClient {
@@ -26,4 +27,9 @@ abstract interface class ServerClient {
     required int timestampUnix,
     required Uint8List signature,
   });
+
+  Future<ServerKeyResponse> getServerKey(String baseUrl);
+
+  /// Raw signed `RevocationSnapshot` bytes, as `installSnapshot` takes them.
+  Future<Uint8List> getRevocationSnapshot(String baseUrl);
 }
