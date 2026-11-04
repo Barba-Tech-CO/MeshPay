@@ -6,6 +6,7 @@ import '../ble/native_lab_service.dart';
 import '../dtn/dtn_buffer_service.dart';
 import '../dtn/lab_dtn_snapshot_key_helper.dart';
 import '../storage/app_support_directory_service.dart';
+import 'issuer_config_helper.dart';
 import 'lab_cheque_stub_helper.dart';
 import 'lab_tx_storage_helper.dart';
 import 'receiver_clock_helper.dart';
@@ -37,6 +38,8 @@ class MeshpayCoreReceiverTxEngineService implements ReceiverTxEngineService {
       ownAccountId: keys.publicKey,
       snapshotPublicKey: LabDtnSnapshotKeyHelper.publicKey(),
       expirySecs: BigInt.from(LabChequeStubHelper.expirySeconds),
+      issuerRootPublicKey: await IssuerConfigHelper.rootPublicKey(),
+      issuerCert: await IssuerConfigHelper.cert(),
     );
   }
 

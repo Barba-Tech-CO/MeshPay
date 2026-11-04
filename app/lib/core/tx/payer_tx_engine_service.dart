@@ -4,6 +4,14 @@ import 'dart:typed_data';
 abstract interface class PayerTxEngineService {
   Future<Uint8List> getPublicKey();
 
+  /// LAB ONLY: `ChequeStub` for [chequeId] issued to this payer's key, sealed
+  /// by the lab ISSUER key and expiring `E` after [issuedAtUnix].
+  Future<Uint8List> labStub({
+    required Uint8List chequeId,
+    required int maxAmountUnits,
+    required int issuedAtUnix,
+  });
+
   /// Strictly increasing and persisted, so a counter is never reused.
   Future<int> nextCounter();
 

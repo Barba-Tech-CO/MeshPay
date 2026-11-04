@@ -1,26 +1,37 @@
 import 'dart:typed_data';
 
-import 'package:protobuf/protobuf.dart';
+import 'package:meshpay_core/meshpay_core.dart';
 
-import '../server/codec/proto_writer_helper.dart';
-import '../server/messages/cheque_stub.dart';
-
-/// LAB ONLY: the lab has no issuing server, so the payer builds the
-/// `ChequeStub` itself (unsigned; the receiver does not verify the ISSUER
-/// signature yet). [expirySeconds] is `E` on both sides.
+/// LAB ONLY: the lab has no issuing server, so the payer seals the
+/// `ChequeStub` itself with the core lab ISSUER key. The lab root is public, so
+/// receivers pin it only in non-release builds (see `IssuerConfigHelper`);
+/// release builds pin the operator root from `--dart-define`.
+/// [expirySeconds] is `E` on both sides.
 class LabChequeStubHelper {
   LabChequeStubHelper._();
 
   static const int expirySeconds = 72 * 3600;
 
-  /// Stub for [chequeId] expiring `E` after [issuedAtUnix].
-  static Uint8List forCheque(Uint8List chequeId, int issuedAtUnix) {
-    final body = CodedBufferWriter();
-    ProtoWriterHelper.bytes(body, 1, chequeId);
-    ProtoWriterHelper.uint64(body, 7, issuedAtUnix + expirySeconds);
-    return ChequeStub(
-      body: body.toBuffer(),
-      serverSignature: Uint8List(0),
-    ).toBytes();
-  }
+  /// Sealed stub for [chequeId] issued to [signerPubkey], expiring `E` after
+  /// [issuedAtUnix].
+  static Future<Uint8List> forCheque({
+    required Uint8List chequeId,
+    required Uint8List signerPubkey,
+    required int maxAmountUnits,
+    required int issuedAtUnix,
+  }) => labChequeStub(
+    chequeId: chequeId,
+    signerPubkey: signerPubkey,
+    maxAmountUnits: BigInt.from(maxAmountUnits),
+    expiresAtUnix: BigInt.from(issuedAtUnix + expirySeconds),
+  );
+
+  static Future<Uint8List> issuerRootPublicKey() => labIssuerRootPublicKey();
+
+  /// Lab ISSUER cert valid from a day ago for 30 days (wall clock; LAB only).
+  static Future<Uint8List> issuerCert() => labIssuerCert(
+    notBeforeUnix: BigInt.from(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000 - 24 * 3600,
+    ),
+  );
 }
