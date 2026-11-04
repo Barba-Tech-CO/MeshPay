@@ -561,6 +561,7 @@ async fn runtime_role_cannot_set_created_at_or_omit_the_seal_key() {
   };
   let payer = funded(&app).await;
   let chequebook_id = random_bytes(16);
+  let expires = (unix_now() + 600) as i64;
   sqlx::query(
     "INSERT INTO chequebooks (chequebook_id, request_id, account_id, epoch, cheque_count,
        max_cheque_units, reserve_units, expires_at_unix, created_at)
@@ -569,7 +570,7 @@ async fn runtime_role_cannot_set_created_at_or_omit_the_seal_key() {
   .bind(&chequebook_id)
   .bind(random_bytes(16))
   .bind(&payer.account_id)
-  .bind((unix_now() + 600) as i64)
+  .bind(expires)
   .execute(&app.pool)
   .await
   .unwrap();
@@ -590,7 +591,7 @@ async fn runtime_role_cannot_set_created_at_or_omit_the_seal_key() {
   .bind(&chequebook_id)
   .bind(&payer.account_id)
   .bind(payer.public_key())
-  .bind((unix_now() + 600) as i64)
+  .bind(expires)
   .bind(random_bytes(8))
   .execute(&app.pool)
   .await

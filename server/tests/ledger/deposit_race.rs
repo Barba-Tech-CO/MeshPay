@@ -1,10 +1,11 @@
 //! PV-SEC-04: concurrent deposits of one cheque_id. Rounds: env `MESHPAY_RACE_ROUNDS`
-//! (default 50 for a fast PR CI; the PRD figure is 1000).
+//! (default 1000; override for local timing with `MESHPAY_RACE_ROUNDS`).
 use crate::support::{Client, TestApp, random_bytes, setup};
 use meshpay_server::wire::cheque_spend::ChequeSpend;
 use meshpay_server::wire::cheque_stub::ChequeStub;
 use meshpay_server::wire::redeem_status::RedeemStatus;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::Barrier;
 use tokio::task::JoinSet;
 
@@ -35,7 +36,8 @@ async fn concurrent_deposits_pay_exactly_once() {
   let rounds: usize = std::env::var("MESHPAY_RACE_ROUNDS")
     .ok()
     .and_then(|value| value.parse().ok())
-    .unwrap_or(50);
+    .unwrap_or(1_000);
+  let started = Instant::now();
   let payee = Client::new();
   payee.register(&app).await;
   let mut expected_credit = 0;
@@ -96,6 +98,10 @@ async fn concurrent_deposits_pay_exactly_once() {
       "round {round}: replay credited"
     );
   }
+  eprintln!(
+    "PV-SEC-04 completed {rounds} rounds in {:.2?}",
+    started.elapsed()
+  );
 }
 
 /// PV-NET-04 lock order: deposits lock only the payer row, so A paying B while B pays A must not

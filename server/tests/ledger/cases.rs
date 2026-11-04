@@ -415,6 +415,142 @@ async fn audit_chain_is_valid_and_schema_has_no_json() {
 }
 
 #[tokio::test]
+async fn cap_profile_reference_schema_is_typed_and_rejects_invalid_profiles() {
+  let Some(app) = setup(true).await else { return };
+
+  let json_columns: i64 = sqlx::query_scalar(
+    "SELECT count(*) FROM information_schema.columns
+     WHERE table_schema = 'public' AND data_type IN ('json', 'jsonb')",
+  )
+  .fetch_one(&app.owner_pool)
+  .await
+  .unwrap();
+  assert_eq!(json_columns, 0);
+
+  for table in ["attestation_levels", "cap_profiles"] {
+    let primary_keys: i64 = sqlx::query_scalar(
+      "SELECT count(*) FROM information_schema.table_constraints
+       WHERE table_schema = 'public' AND table_name = $1 AND constraint_type = 'PRIMARY KEY'",
+    )
+    .bind(table)
+    .fetch_one(&app.owner_pool)
+    .await
+    .unwrap();
+    assert_eq!(primary_keys, 1, "{table} must have a primary key");
+  }
+  let profile_checks: i64 = sqlx::query_scalar(
+    "SELECT count(*) FROM information_schema.table_constraints
+     WHERE table_schema = 'public' AND table_name = 'cap_profiles'
+       AND constraint_type = 'CHECK'",
+  )
+  .fetch_one(&app.owner_pool)
+  .await
+  .unwrap();
+  assert!(
+    profile_checks > 0,
+    "cap_profiles must have CHECK constraints"
+  );
+
+  let profile_foreign_keys: i64 = sqlx::query_scalar(
+    "SELECT count(*) FROM information_schema.table_constraints
+     WHERE table_schema = 'public' AND table_name = 'cap_profiles'
+       AND constraint_type = 'FOREIGN KEY'",
+  )
+  .fetch_one(&app.owner_pool)
+  .await
+  .unwrap();
+  assert!(
+    profile_foreign_keys > 0,
+    "cap_profiles must reference attestation_levels"
+  );
+  let levels: i64 = sqlx::query_scalar("SELECT count(*) FROM attestation_levels")
+    .fetch_one(&app.owner_pool)
+    .await
+    .unwrap();
+  assert_eq!(levels, 4);
+
+  let invalid_level = sqlx::query(
+    "INSERT INTO cap_profiles
+       (profile_id, attestation_level, reserve_units, max_cheque_units, expires_seconds,
+        multiplier, max_cheque_count)
+     VALUES ($1, 'not_a_level', 100, 10, 60, 1.0, 10)",
+  )
+  .bind(hex::encode(random_bytes(16)))
+  .execute(&app.owner_pool)
+  .await;
+  match invalid_level {
+    Err(sqlx::Error::Database(database_error)) => {
+      assert_eq!(database_error.code().as_deref(), Some("22P02"));
+    }
+    Err(other) => panic!("expected invalid attestation enum value, got {other}"),
+    Ok(_) => panic!("invalid attestation level was accepted"),
+  }
+
+  assert_invalid_cap_profile(&app, 0, 0, 60, 1.0, 1).await;
+  assert_invalid_cap_profile(&app, 100, 0, 60, 1.0, 10).await;
+  assert_invalid_cap_profile(&app, 100, 10, 0, 1.0, 10).await;
+  for _ in 0..20 {
+    let reserve = random_u64_below(1_000_000) as i64 + 1;
+    let excess = random_u64_below(1_000_000) as i64 + 1;
+    assert_invalid_cap_profile(&app, reserve, reserve + excess, 60, 1.0, 10).await;
+  }
+  for _ in 0..20 {
+    let reserve = random_u64_below(1_000_000) as i64 + 1;
+    let min_face = (reserve + 9) / 10;
+    let face = min_face + random_u64_below((reserve - min_face + 1) as u64) as i64;
+    let multiplier = if random_u64_below(2) == 0 {
+      -0.01
+    } else {
+      1.01
+    };
+    assert_invalid_cap_profile(&app, reserve, face, 60, multiplier, 10).await;
+  }
+  for _ in 0..20 {
+    let face = random_u64_below(100_000) as i64 + 1;
+    let n_max = random_u64_below(10) as i64 + 1;
+    let reserve = face * (n_max + 1);
+    assert_invalid_cap_profile(&app, reserve, face, 60, 1.0, n_max).await;
+  }
+}
+
+fn random_u64_below(limit: u64) -> u64 {
+  let bytes = random_bytes(8);
+  u64::from_ne_bytes(bytes.try_into().unwrap()) % limit
+}
+
+async fn assert_invalid_cap_profile(
+  app: &TestApp,
+  reserve_units: i64,
+  max_cheque_units: i64,
+  expires_seconds: i64,
+  multiplier: f64,
+  max_cheque_count: i64,
+) {
+  let profile_id = hex::encode(random_bytes(16));
+  let error = sqlx::query(
+    "INSERT INTO cap_profiles
+       (profile_id, attestation_level, reserve_units, max_cheque_units, expires_seconds,
+        multiplier, max_cheque_count)
+     VALUES ($1, 'strongbox', $2, $3, $4, $5, $6)",
+  )
+  .bind(profile_id)
+  .bind(reserve_units)
+  .bind(max_cheque_units)
+  .bind(expires_seconds)
+  .bind(multiplier)
+  .bind(max_cheque_count)
+  .execute(&app.owner_pool)
+  .await;
+  match error {
+    Err(sqlx::Error::Database(database_error)) => {
+      assert_eq!(database_error.code().as_deref(), Some("23514"));
+    }
+    Err(other) => panic!("expected CHECK violation, got {other}"),
+    Ok(_) => panic!("invalid cap profile was accepted"),
+  }
+}
+
+#[tokio::test]
 async fn balance_read_requires_the_accounts_own_fresh_signature() {
   let Some(app) = setup(true).await else { return };
   let (me, other) = (funded(&app).await, funded(&app).await);
