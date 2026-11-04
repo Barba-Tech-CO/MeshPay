@@ -1,6 +1,6 @@
 use crate::db::scram::scram_sha256_verifier;
 use sqlx::postgres::PgPoolOptions;
-use sqlx::{AssertSqlSafe, PgPool};
+use sqlx::{AssertSqlSafe, PgPool, Postgres, Transaction};
 
 pub async fn connect(database_url: &str) -> Result<PgPool, sqlx::Error> {
   PgPoolOptions::new()
@@ -34,9 +34,12 @@ pub async fn apply_schema(
   initial_grant_units: u64,
 ) -> Result<(), sqlx::Error> {
   let admin = connect(admin_url).await?;
+  let mut tx = admin.begin().await?;
+  lock_setup(&mut tx).await?;
   sqlx::query("ALTER SCHEMA public OWNER TO meshpay_owner")
-    .execute(&admin)
+    .execute(&mut *tx)
     .await?;
+  tx.commit().await?;
   admin.close().await;
   let cap = supply_cap_units.to_string();
   let grant = initial_grant_units.to_string();
@@ -64,9 +67,7 @@ pub async fn apply_schema(
 async fn prepare_roles(admin: &PgPool, runtime_db_password: &str) -> Result<(), sqlx::Error> {
   let verifier = scram_sha256_verifier(runtime_db_password).map_err(sqlx::Error::Protocol)?;
   let mut tx = admin.begin().await?;
-  sqlx::query("SELECT pg_advisory_xact_lock(7260001)")
-    .execute(&mut *tx)
-    .await?;
+  lock_setup(&mut tx).await?;
   for (role, login) in [("meshpay_owner", false), ("meshpay_app", true)] {
     let exists: bool =
       sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1)")
@@ -90,5 +91,12 @@ async fn prepare_roles(admin: &PgPool, runtime_db_password: &str) -> Result<(), 
       .await?;
   }
   tx.commit().await?;
+  Ok(())
+}
+
+async fn lock_setup(tx: &mut Transaction<'_, Postgres>) -> Result<(), sqlx::Error> {
+  sqlx::query("SELECT pg_advisory_xact_lock(7260001)")
+    .execute(&mut **tx)
+    .await?;
   Ok(())
 }
