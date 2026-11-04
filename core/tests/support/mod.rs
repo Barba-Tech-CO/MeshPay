@@ -104,12 +104,29 @@ pub fn stub_expiring(cheque_id: &[u8], expires_at_unix: u64) -> Vec<u8> {
   seal(&stub_body(cheque_id, expires_at_unix))
 }
 
+pub fn stub_with_max_amount(
+  cheque_id: &[u8],
+  expires_at_unix: u64,
+  max_amount_units: u64,
+) -> Vec<u8> {
+  let mut body = stub_body(cheque_id, expires_at_unix);
+  body.max_amount_units = max_amount_units;
+  seal(&body)
+}
+
 /// Valid stub (expires `E` after `T_SRV`) for the cheque named in `spend_body`.
 pub fn stub_for(spend_body: &[u8]) -> Vec<u8> {
   let cheque_id = ChequeSpendBody::decode(spend_body)
     .map(|body| body.cheque_id)
     .unwrap_or_default();
   stub_expiring(&cheque_id, T_SRV + E)
+}
+
+pub fn random_below(max_exclusive: u64) -> u64 {
+  assert!(max_exclusive > 0);
+  let mut bytes = [0; 8];
+  getrandom::fill(&mut bytes).unwrap();
+  u64::from_le_bytes(bytes) % max_exclusive
 }
 
 /// Fresh snapshot at `T_SRV`, clock reading `T_SRV`, no reboot.

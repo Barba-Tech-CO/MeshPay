@@ -51,6 +51,43 @@ impl Pair {
     }
   }
 
+  fn propose_with_limits(
+    &self,
+    index: u64,
+    expires_at_unix: u64,
+    amount_units: u64,
+    max_amount_units: u64,
+  ) -> Vec<u8> {
+    let cheque_id = format!("cheque-{index:08}").into_bytes();
+    let body = ChequeSpendBody {
+      cheque_id: cheque_id.clone(),
+      payee_account_id: OWN_ACCOUNT.to_vec(),
+      amount_units,
+      counter: index,
+      ..Default::default()
+    }
+    .encode_to_vec();
+    let stub = support::stub_with_max_amount(&cheque_id, expires_at_unix, max_amount_units);
+    self
+      .payer
+      .propose(&body, index, OWN_ACCOUNT, &stub)
+      .unwrap()
+  }
+
+  fn store_with_limits(
+    &self,
+    index: u64,
+    expires_at_unix: u64,
+    amount_units: u64,
+    max_amount_units: u64,
+    context: &AcceptanceContext,
+  ) -> Result<Vec<u8>, String> {
+    self.receiver.store_propose(
+      &self.propose_with_limits(index, expires_at_unix, amount_units, max_amount_units),
+      context,
+    )
+  }
+
   /// Propose for a fresh cheque expiring at `expires_at_unix`.
   fn propose(&self, index: u64, expires_at_unix: u64) -> Vec<u8> {
     let body = ChequeSpendBody {
@@ -148,6 +185,66 @@ fn expired_cheque_is_refused() {
   assert_eq!(
     Pair::new().store(1, T_SRV + 10, at(T_SRV + 10, false)),
     Err("cheque expired".to_owned())
+  );
+}
+
+#[test]
+fn randomized_receiver_requests_refuse_expired_and_over_max_stubs() {
+  let pair = Pair::new();
+  let started = std::time::Instant::now();
+  let mut accepted = 0;
+  let mut over_max_refused = 0;
+  let mut expired_refused = 0;
+
+  for index in 1..=1_000 {
+    let max_amount = 1 + support::random_below(1_000);
+    let (amount, expires_at, expected_error) = match index % 3 {
+      0 => (
+        1 + support::random_below(max_amount),
+        T_SRV + 1 + support::random_below(E),
+        None,
+      ),
+      1 => (
+        max_amount + 1 + support::random_below(1_000),
+        T_SRV + 1 + support::random_below(E),
+        Some("amount exceeds the stub maximum"),
+      ),
+      _ => (
+        1 + support::random_below(max_amount),
+        T_SRV - 1 - support::random_below(E),
+        Some("cheque expired"),
+      ),
+    };
+    let outcome =
+      pair.store_with_limits(index, expires_at, amount, max_amount, &support::context());
+
+    match expected_error {
+      None => {
+        assert!(outcome.is_ok(), "valid request {index}: {outcome:?}");
+        accepted += 1;
+      }
+      Some("amount exceeds the stub maximum") => {
+        assert_eq!(
+          outcome,
+          Err("amount exceeds the stub maximum".to_owned()),
+          "request {index}"
+        );
+        over_max_refused += 1;
+      }
+      Some("cheque expired") => {
+        assert_eq!(outcome, Err("cheque expired".to_owned()), "request {index}");
+        expired_refused += 1;
+      }
+      other => panic!("unexpected expected error: {other:?}"),
+    }
+  }
+
+  assert_eq!(accepted, 333);
+  assert_eq!(over_max_refused, 334);
+  assert_eq!(expired_refused, 333);
+  eprintln!(
+    "PV-CRIP-05 receiver: 1000 randomized requests in {:.1} ms",
+    started.elapsed().as_secs_f64() * 1_000.0
   );
 }
 
