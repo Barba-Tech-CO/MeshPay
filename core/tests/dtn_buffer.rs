@@ -155,6 +155,17 @@ fn push(from: &Node, to: &Node) -> usize {
   batch.len()
 }
 
+/// Defaults to the PRD 20 MB load; set MESHPAY_DTN_LOAD_BYTES=6291456 for a 6 MB CI-sized run.
+fn dtn_load_bytes() -> usize {
+  match std::env::var("MESHPAY_DTN_LOAD_BYTES") {
+    Ok(value) => value
+      .parse()
+      .expect("MESHPAY_DTN_LOAD_BYTES must be a positive integer"),
+    Err(std::env::VarError::NotPresent) => 20 * 1024 * 1024,
+    Err(error) => panic!("MESHPAY_DTN_LOAD_BYTES is unavailable: {error}"),
+  }
+}
+
 #[test]
 fn pv_dtn_01_carrier_cannot_read_the_payload() {
   let destination_key = random_bytes(32);
@@ -307,12 +318,16 @@ fn pv_dtn_02_small_cap_never_exceeded_dedups_and_evicts_oldest() {
   assert_cap_and_oldest_first_eviction(&node, TEST_CAP, 60);
 }
 
-/// PV-DTN-02 as written in the PRD: real 5 MB cap under a 20 MB load (~80 s of fsyncs).
+/// Checks the real buffer cap under the full PRD load; set MESHPAY_DTN_LOAD_BYTES to a smaller
+/// value only when a CI budget requires it.
 #[test]
-#[ignore = "slow: real 5 MB cap, 20 MB load"]
-fn pv_dtn_02_real_cap_under_20_mb_load() {
+fn pv_dtn_02_real_cap_under_configured_load() {
+  let load_bytes = dtn_load_bytes();
+  let envelope_bytes = envelope(payload(0), NOW, 4).len();
+  assert!(load_bytes >= BUFFER_CAP_BYTES as usize + envelope_bytes);
+  let count = u64::try_from(load_bytes.div_ceil(envelope_bytes)).unwrap();
   let node = Node::new();
-  assert_cap_and_oldest_first_eviction(&node, BUFFER_CAP_BYTES, 4200);
+  assert_cap_and_oldest_first_eviction(&node, BUFFER_CAP_BYTES, count);
 }
 
 #[test]
@@ -888,9 +903,11 @@ fn snapshot_is_stored_canonically_without_unknown_fields() {
 fn one_origin_pair_holds_at_most_one_megabyte() {
   let node = Node::with_limits(64 * 1024 * 1024, UNLIMITED_RATE);
   let pair = b"payer|payee".to_vec();
+  let load_bytes = dtn_load_bytes();
+  assert!(load_bytes >= MAX_PER_PAIR_BYTES as usize);
   let mut offered = 0usize;
   let mut counter = 0u64;
-  while offered < 20 * 1024 * 1024 {
+  while offered < load_bytes {
     let session = DtnPeerSession::with_origin_pair(Arc::clone(&node.engine), pair.clone());
     for _ in 0..MAX_PER_CONNECTION {
       let bytes = envelope(payload(counter), NOW, 4);
