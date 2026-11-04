@@ -4,7 +4,7 @@ import 'package:meshpay_core/meshpay_core.dart';
 
 import '../ble/native_lab_service.dart';
 import '../dtn/dtn_buffer_service.dart';
-import '../dtn/lab_dtn_snapshot_key_helper.dart';
+import '../dtn/snapshot_config_helper.dart';
 import '../keys/payment_key_identity.dart';
 import '../keys/payment_key_signer.dart';
 import '../server/trust/server_trust_service.dart';
@@ -51,7 +51,9 @@ class MeshpayCoreExternalReceiverTxEngineService
       ownPublicKey: identity.publicKey,
       payerPublicKey: payerPublicKey,
       ownAccountId: identity.publicKey,
-      snapshotPublicKey: LabDtnSnapshotKeyHelper.publicKey(),
+      snapshotCert: await SnapshotConfigHelper.cert(
+        fetch: _trust.snapshotCert,
+      ),
       expirySecs: BigInt.from(LabChequeStubHelper.expirySeconds),
       issuerRootPublicKey: await IssuerConfigHelper.rootPublicKey(),
       issuerCert: await IssuerConfigHelper.cert(fetch: _trust.issuerCert),

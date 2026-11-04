@@ -2,23 +2,25 @@ import 'dart:typed_data';
 
 import 'package:meshpay_core/meshpay_core.dart';
 
+import '../server/trust/server_trust_service.dart';
 import '../storage/app_support_directory_service.dart';
+import '../tx/issuer_config_helper.dart';
 import '../tx/lab_tx_storage_helper.dart';
 import 'dtn_buffer_service.dart';
 import 'dtn_session_service.dart';
-import 'lab_dtn_snapshot_key_helper.dart';
 import 'meshpay_core_dtn_session_service.dart';
+import 'snapshot_config_helper.dart';
 
 /// LAB ONLY: the buffer database and its SQLCipher key live under the app
 /// support dir with the tx lab keys (PLAINTEXT key file, see
-/// [LabTxStorageHelper]); the SNAPSHOT role key is the shared
-/// [LabDtnSnapshotKeyHelper] key, identical on every lab device.
+/// [LabTxStorageHelper]).
 class MeshpayCoreDtnBufferService implements DtnBufferService {
-  MeshpayCoreDtnBufferService(this._directory);
+  MeshpayCoreDtnBufferService(this._directory, this._trust);
 
   static const String _side = 'dtn';
 
   final AppSupportDirectoryService _directory;
+  final ServerTrustService _trust;
   Future<DtnBuffer>? _opening;
 
   @override
@@ -70,7 +72,10 @@ class MeshpayCoreDtnBufferService implements DtnBufferService {
     return DtnBuffer.open(
       dbPath: await LabTxStorageHelper.dbPath(_directory, _side),
       dbKey: keys.dbKey,
-      snapshotPublicKey: LabDtnSnapshotKeyHelper.publicKey(),
+      snapshotCert: await SnapshotConfigHelper.cert(
+        fetch: _trust.snapshotCert,
+      ),
+      issuerRootPublicKey: await IssuerConfigHelper.rootPublicKey(),
       maxIngestPerMinute: 60,
     );
   }
