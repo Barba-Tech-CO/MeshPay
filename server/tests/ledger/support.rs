@@ -25,6 +25,7 @@ use meshpay_server::wire::issue_request_body::IssueRequestBody;
 use meshpay_server::wire::issue_response::IssueResponse;
 use meshpay_server::wire::register_request::RegisterRequest;
 use meshpay_server::wire::register_response::RegisterResponse;
+use meshpay_server::wire::server_key_cert::ServerKeyCert;
 use meshpay_server::wire::server_key_role::ServerKeyRole;
 use p256::ecdsa::SigningKey;
 use prost::Message;
@@ -114,6 +115,14 @@ async fn setup_inner(
     not_before,
     not_after,
   );
+  let snapshot_seed = random_bytes(32);
+  let snapshot_cert = issue_cert(
+    &root_key,
+    &signing_key_from_seed(&snapshot_seed).unwrap(),
+    ServerKeyRole::Snapshot,
+    now - 3_600,
+    now + 86_400,
+  );
   let (database_url, owner_url, isolated_db) = match isolated {
     None => (database_url, owner_url, None),
     Some(_) => {
@@ -125,28 +134,14 @@ async fn setup_inner(
       )
     }
   };
-  let mut config = AppConfig {
-    database_url: database_url.clone(),
-    listen_addr: "127.0.0.1:0".to_owned(),
-    lab_mode: true,
-    server_signing_key_hex: hex::encode(&server_seed),
-    server_root_public_key_hex: hex::encode(compressed_public_key(&root_key)),
-    server_key_cert_hex: hex::encode(cert.encode_to_vec()),
-    cap_cheque_units: 1_000,
-    cap_reserve_units: 5_000,
-    cheque_max_count: 10,
-    cheque_ttl_max_seconds: 3_600,
-    balance_auth_window_seconds: 60,
-    request_timeout_seconds: 10,
-    max_concurrent_requests: 64,
-    register_limit_per_minute: 10_000,
-    challenge_limit_per_minute: 10_000,
-    control_limit_per_minute: 10_000,
-    attestation_roots_pem_file: "/dev/null".to_owned(),
-    attestation_revocation_file: "/dev/null".to_owned(),
-    attestation_challenge_ttl_seconds: 60,
-    allow_tee_issuance: false,
-  };
+  let mut config = test_config(
+    database_url.clone(),
+    &server_seed,
+    &root_key,
+    &cert,
+    &snapshot_seed,
+    &snapshot_cert,
+  );
   tweak(&mut config);
   let shared_owner_url = isolated_db.as_ref().map_or(&owner_url, |(url, _)| url);
   pool::migrate(
@@ -389,4 +384,84 @@ impl Client {
       body: body_bytes,
     }
   }
+}
+
+fn test_config(
+  database_url: String,
+  server_seed: &[u8],
+  root_key: &SigningKey,
+  cert: &ServerKeyCert,
+  snapshot_seed: &[u8],
+  snapshot_cert: &ServerKeyCert,
+) -> AppConfig {
+  AppConfig {
+    database_url,
+    listen_addr: "127.0.0.1:0".to_owned(),
+    lab_mode: true,
+    server_signing_key_hex: hex::encode(server_seed),
+    server_root_public_key_hex: hex::encode(compressed_public_key(root_key)),
+    server_key_cert_hex: hex::encode(cert.encode_to_vec()),
+    server_snapshot_key_hex: hex::encode(snapshot_seed),
+    server_snapshot_key_cert_hex: hex::encode(snapshot_cert.encode_to_vec()),
+    cap_cheque_units: 1_000,
+    cap_reserve_units: 5_000,
+    cheque_max_count: 10,
+    cheque_ttl_max_seconds: 3_600,
+    balance_auth_window_seconds: 60,
+    request_timeout_seconds: 10,
+    max_concurrent_requests: 64,
+    register_limit_per_minute: 10_000,
+    challenge_limit_per_minute: 10_000,
+    control_limit_per_minute: 10_000,
+    public_read_limit_per_minute: 10_000,
+    attestation_roots_pem_file: "/dev/null".to_owned(),
+    attestation_revocation_file: "/dev/null".to_owned(),
+    attestation_challenge_ttl_seconds: 60,
+    allow_tee_issuance: false,
+  }
+}
+
+/// `AppState::new` (no database touched) with ISSUER / SNAPSHOT certs valid in the given windows;
+/// `shared_key` reuses the issuer seed as the SNAPSHOT key.
+pub fn app_state_for(
+  issuer: (u64, u64),
+  snapshot: (u64, u64),
+  shared_key: bool,
+) -> Result<AppState, String> {
+  let root_key = signing_key_from_seed(&random_bytes(32)).unwrap();
+  let server_seed = random_bytes(32);
+  let snapshot_seed = if shared_key {
+    server_seed.clone()
+  } else {
+    random_bytes(32)
+  };
+  let cert = issue_cert(
+    &root_key,
+    &signing_key_from_seed(&server_seed).unwrap(),
+    ServerKeyRole::Issuer,
+    issuer.0,
+    issuer.1,
+  );
+  let snapshot_cert = issue_cert(
+    &root_key,
+    &signing_key_from_seed(&snapshot_seed).unwrap(),
+    ServerKeyRole::Snapshot,
+    snapshot.0,
+    snapshot.1,
+  );
+  let url = "postgres://unused@127.0.0.1/unused".to_owned();
+  let pool = sqlx::postgres::PgPoolOptions::new()
+    .connect_lazy(&url)
+    .unwrap();
+  AppState::new(
+    pool,
+    test_config(
+      url,
+      &server_seed,
+      &root_key,
+      &cert,
+      &snapshot_seed,
+      &snapshot_cert,
+    ),
+  )
 }

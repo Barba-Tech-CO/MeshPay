@@ -8,6 +8,7 @@ mod deposit_race;
 mod deposit_throughput;
 mod equivocation_independent;
 mod independent_verifier;
+mod public_keys;
 mod pv_sec_05;
 mod random_source;
 mod solvency_random_ops;
