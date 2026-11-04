@@ -19,6 +19,8 @@ class ServerLabPage extends StatelessWidget {
     final deposit = viewModel.lastDeposit;
     final payerBalance = viewModel.payerBalance;
     final payeeBalance = viewModel.payeeBalance;
+    final issuerCert = viewModel.issuerCert;
+    final snapshot = viewModel.snapshot;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Servidor do ledger')),
@@ -63,6 +65,10 @@ class ServerLabPage extends StatelessWidget {
                 onPressed: busy ? null : viewModel.readBalance,
                 child: const Text('Ler saldo'),
               ),
+              FilledButton(
+                onPressed: busy ? null : viewModel.fetchTrust,
+                child: const Text('Buscar confiança'),
+              ),
             ],
           ),
           if (viewModel.error case final error?)
@@ -75,6 +81,45 @@ class ServerLabPage extends StatelessWidget {
                 ),
               ),
             ),
+          if (issuerCert != null && snapshot != null) ...[
+            const SizedBox(height: 16),
+            SectionCardDs(
+              title: 'Confiança do servidor',
+              child: Column(
+                children: [
+                  MetricRowDs(
+                    label: 'Servidor',
+                    value: viewModel.trustBaseUrl,
+                    mono: true,
+                  ),
+                  MetricRowDs(
+                    label: 'Chave do emissor',
+                    value: HexHelper.encode(issuerCert.keyId),
+                    mono: true,
+                  ),
+                  MetricRowDs(
+                    label: 'Certificado válido até',
+                    value: ServerLabMessageHelper.unixToText(
+                      issuerCert.notAfterUnix,
+                    ),
+                    mono: true,
+                  ),
+                  MetricRowDs(
+                    label: 'Snapshot emitido em',
+                    value: ServerLabMessageHelper.unixToText(
+                      snapshot.issuedAtUnix,
+                    ),
+                    mono: true,
+                  ),
+                  MetricRowDs(
+                    label: 'Chaves de servidor revogadas',
+                    value: '${snapshot.revokedServerKeyCount}',
+                    mono: true,
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (payer != null) ...[
             const SizedBox(height: 16),
             SectionCardDs(
