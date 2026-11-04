@@ -29,3 +29,4 @@ x509-parser = { version = "0.18.1", features = ["verify"] }
 http-body-util = "0.1.5"
 rcgen = { version = "0.14.10", features = ["x509-parser"] }
 time = "0.3.55"
+proptest = "1.12.0"
