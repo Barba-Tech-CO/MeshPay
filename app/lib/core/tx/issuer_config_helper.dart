@@ -25,8 +25,10 @@ class IssuerConfigHelper {
   static Future<Uint8List> cert({
     bool isRelease = kReleaseMode,
     String configuredHex = _certHex,
+    Future<Uint8List> Function()? fetch,
   }) async {
     if (!isRelease) return LabChequeStubHelper.issuerCert();
+    if (configuredHex.isEmpty && fetch != null) return fetch();
     return _decode('ISSUER_CERT_HEX', configuredHex);
   }
 
