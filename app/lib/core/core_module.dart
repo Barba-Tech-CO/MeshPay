@@ -20,6 +20,7 @@ import 'noise/meshpay_core_noise_service.dart';
 import 'noise/noise_service.dart';
 import 'server/client/dio_server_client.dart';
 import 'server/client/server_client.dart';
+import 'server/client/tls_pin_helper.dart';
 import 'server/trust/server_trust_service.dart';
 import 'storage/app_support_directory_service.dart';
 import 'storage/path_provider_app_support_directory_service.dart';
@@ -58,14 +59,19 @@ final coreModule = createModule(
             ? MeshpayCoreExternalReceiverTxEngineService.new
             : MeshpayCoreReceiverTxEngineService.new,
       )
-      ..addSingleton<Dio>(
-        () => Dio(
+      ..addSingleton<Dio>(() {
+        final dio = Dio(
           BaseOptions(
             connectTimeout: const Duration(seconds: 5),
             receiveTimeout: const Duration(seconds: 15),
           ),
-        ),
-      )
+        );
+        final adapter = TlsPinHelper.configuredAdapter();
+        if (adapter != null) {
+          dio.httpClientAdapter = adapter;
+        }
+        return dio;
+      })
       ..addSingleton<ServerClient>(DioServerClient.new)
       ..addSingleton<ServerTrustService>(ServerTrustService.new)
       ..addSingleton<DtnBufferService>(MeshpayCoreDtnBufferService.new)
