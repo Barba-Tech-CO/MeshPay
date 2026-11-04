@@ -166,6 +166,22 @@ pub fn run(p: &Params, runs: usize, seed: u64) -> Stats {
   }
 }
 
+/// Exact PRD 5.4 loss for `Arrival::Fixed` with `Detect::Never`; for `HonestBug` this is the
+/// expected loss, not a bound.
+pub fn prd_loss(p: &Params) -> f64 {
+  if p.m == 0.0 {
+    return 0.0;
+  }
+  let (f, r) = (p.m * p.profile.cheque, p.m * p.profile.reserve);
+  let k = (p.profile.validity_h / ENCOUNTER_H).floor();
+  match p.strategy {
+    Strategy::Spread => (k * f - r).max(0.0),
+    Strategy::SpreadCapped => (k.min(N_MAX as f64) * f - r).max(0.0),
+    Strategy::Reissue => (k - 1.0).max(0.0) * f,
+    Strategy::HonestBug(prob) => (r / f).round() * prob * f,
+  }
+}
+
 /// Analytic upper bound for `Arrival::Fixed` (any detection): k <= floor(E / 2 h).
 pub fn analytic_bound(p: &Params) -> f64 {
   let (f, r) = (p.m * p.profile.cheque, p.m * p.profile.reserve);
@@ -231,6 +247,45 @@ mod tests {
       Strategy::HonestBug(0.5),
     ] {
       assert_eq!(max_loss(&params(PROFILES[2], 0.0, s)), 0.0);
+    }
+  }
+
+  #[test]
+  fn prd_formulas_match_in_1000_runs_for_every_profile_and_level() {
+    for profile in PROFILES {
+      for m in [1.0, 0.5, 0.0] {
+        for strategy in [Strategy::Spread, Strategy::SpreadCapped] {
+          let p = params(profile, m, strategy);
+          let stats = run(&p, 1000, 11);
+          let expected = prd_loss(&p);
+          assert_eq!(
+            (stats.mean, stats.p95, stats.max),
+            (expected, expected, expected),
+            "{} m={m} {strategy:?}",
+            profile.name
+          );
+        }
+      }
+    }
+  }
+
+  #[test]
+  fn m_zero_gives_no_loss_for_every_profile_and_cap_profile() {
+    for profile in PROFILES {
+      for strategy in [
+        Strategy::Spread,
+        Strategy::SpreadCapped,
+        Strategy::Reissue,
+        Strategy::HonestBug(1.0),
+      ] {
+        let stats = run(&params(profile, 0.0, strategy), 1000, 3);
+        assert_eq!(
+          (stats.mean, stats.p95, stats.max),
+          (0.0, 0.0, 0.0),
+          "{} {strategy:?}",
+          profile.name
+        );
+      }
     }
   }
 

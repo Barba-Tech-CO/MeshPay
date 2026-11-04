@@ -209,6 +209,71 @@ fn pv_dtn_01_carrier_cannot_read_the_payload() {
   }
 }
 
+/// PV-DTN-01 with every envelope checked: the mule holds all of its own keys and retrieves all
+/// 100 third-party envelopes across connections (each limited to `MAX_PER_CONNECTION`), still
+/// failing to decrypt every `encrypted_server_batch`.
+#[test]
+fn pv_dtn_01_mule_cannot_decrypt_any_of_100_envelopes_across_connections() {
+  let destination_key = random_bytes(32);
+  let destination_cipher =
+    ChaCha20Poly1305::new(&Key::try_from(destination_key.as_slice()).unwrap());
+  let mule = Node::new();
+  let mule_keys = [DB_KEY, [21; 32], [22; 32], [23; 32]];
+  let marker = b"redeem-request-plaintext-marker";
+  let mut ids = Vec::new();
+  for index in 0..100u32 {
+    let mut plaintext = marker.to_vec();
+    plaintext.extend_from_slice(&index.to_be_bytes());
+    let nonce_bytes = random_bytes(12);
+    let mut sealed = nonce_bytes.clone();
+    sealed.extend(
+      destination_cipher
+        .encrypt(
+          &Nonce::try_from(&nonce_bytes).unwrap(),
+          plaintext.as_slice(),
+        )
+        .unwrap(),
+    );
+    let bytes = envelope(sealed, NOW, 4);
+    ids.push(id_of(&bytes));
+    assert_eq!(
+      mule.engine.ingest(&bytes, NOW).unwrap(),
+      IngestOutcome::Stored
+    );
+  }
+  assert_eq!(ids.len(), 100);
+  assert_eq!(mule.engine.envelope_count().unwrap(), 100);
+
+  let mut retrieved = 0usize;
+  for connection in ids.chunks(MAX_PER_CONNECTION) {
+    let carried = mule.engine.envelopes_for(connection).unwrap();
+    assert_eq!(carried.len(), MAX_PER_CONNECTION);
+    for bytes in carried {
+      let envelope = SyncEnvelope::decode(bytes.as_slice()).unwrap();
+      assert!(envelope.public_proofs.is_empty());
+      assert!(
+        !envelope
+          .encrypted_server_batch
+          .windows(marker.len())
+          .any(|window| window == marker)
+      );
+      let (nonce, ciphertext) = envelope.encrypted_server_batch.split_at(12);
+      let nonce = Nonce::try_from(nonce).unwrap();
+      for key in &mule_keys {
+        let mule_cipher = ChaCha20Poly1305::new(&Key::try_from(key.as_slice()).unwrap());
+        assert!(
+          mule_cipher.decrypt(&nonce, ciphertext).is_err(),
+          "mule opened envelope {:?}",
+          envelope.envelope_id
+        );
+      }
+      assert!(destination_cipher.decrypt(&nonce, ciphertext).is_ok());
+      retrieved += 1;
+    }
+  }
+  assert_eq!(retrieved, 100);
+}
+
 /// Offers `count` same-class envelopes (ttl 4) with increasing receive time; checks the cap on
 /// every insert and that exactly the newest ones survive (oldest received evicted first).
 fn assert_cap_and_oldest_first_eviction(node: &Node, cap: i64, count: u64) {
