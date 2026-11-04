@@ -134,6 +134,8 @@ void main() {
       return true;
     });
     expect(stub.chequeId, chequeId);
+    expect(stub.signerPubkey, await engine.getPublicKey());
+    expect(stub.maxAmountUnits, PayerTxLabFlow.testAmountUnits);
     expect(
       stub.expiresAtUnix,
       signedAtUnix + LabChequeStubHelper.expirySeconds,
