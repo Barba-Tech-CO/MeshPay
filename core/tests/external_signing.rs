@@ -504,7 +504,7 @@ fn dart_facing_api_runs_the_external_exchange() {
     lab.payee.public_key(),
     lab.payer.public_key(),
     OWN_ACCOUNT.to_vec(),
-    support::snapshot_public_key(),
+    support::snapshot_cert(),
     support::E,
     support::issuer_root_public_key(),
     support::issuer_cert(),

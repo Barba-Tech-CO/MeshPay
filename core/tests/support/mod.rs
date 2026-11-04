@@ -125,8 +125,14 @@ pub fn context() -> AcceptanceContext {
   }
 }
 
-pub fn snapshot_public_key() -> Vec<u8> {
-  compressed_public_key(&signing_key_from_seed(&SNAPSHOT_SEED).unwrap())
+pub fn snapshot_cert() -> Vec<u8> {
+  cert_with(
+    ROOT_SEED,
+    SNAPSHOT_SEED,
+    IssuerTrust::SNAPSHOT_ROLE,
+    CERT_NOT_BEFORE,
+    CERT_NOT_AFTER,
+  )
 }
 
 pub fn issuer_key_id() -> Vec<u8> {
