@@ -4,12 +4,12 @@ use p256::ecdsa::{SigningKey, VerifyingKey};
 use social_recovery::cheque::Cheque;
 use social_recovery::device::Device;
 use social_recovery::error::RecoveryError;
-use social_recovery::keys::{random_signing_key, sign};
+use social_recovery::keys::{random_signing_key, sign, verify};
 use social_recovery::ledger::Ledger;
-use social_recovery::params::{CANCEL_BLOCK, DAY, GUARDIANS, HOUR, T_REC};
+use social_recovery::params::{CANCEL_BLOCK, DAY, GUARDIANS, HOUR, RATE_WINDOW, T_REC};
 use social_recovery::recovery_cancel::RecoveryCancel;
 use social_recovery::recovery_cert::RecoveryCert;
-use social_recovery::sealing::{open, seal};
+use social_recovery::sealing::{SealedShare, open, seal};
 use social_recovery::shares;
 
 const ACCOUNT: &str = "acct-1";
@@ -20,6 +20,8 @@ struct World {
   rk_public: VerifyingKey,
   owner: Device,
   shop: Device,
+  guardian_keys: Vec<SigningKey>,
+  sealed_shares: Vec<SealedShare>,
   opened: Vec<Vec<u8>>,
   ledger: Ledger,
 }
@@ -30,13 +32,13 @@ fn onboard() -> World {
   let shop = Device::new("shop", 1);
   let guardian_keys: Vec<SigningKey> = (0..GUARDIANS).map(|_| random_signing_key()).collect();
   let raw = shares::split(&rk, GUARDIANS);
-  let opened = raw
+  let sealed_shares: Vec<SealedShare> = raw
     .iter()
     .zip(&guardian_keys)
     .enumerate()
     .map(|(i, (share, gk))| {
       let id = format!("g{i}");
-      let sealed = seal(
+      seal(
         share,
         ACCOUNT,
         &id,
@@ -44,8 +46,16 @@ fn onboard() -> World {
         gk.verifying_key(),
         &owner.payment_key,
       )
-      .unwrap();
-      open(&sealed, gk, &owner.payment_public(), ACCOUNT, &id, 1).unwrap()
+      .unwrap()
+    })
+    .collect();
+  let opened = sealed_shares
+    .iter()
+    .zip(&guardian_keys)
+    .enumerate()
+    .map(|(i, (sealed, gk))| {
+      let id = format!("g{i}");
+      open(sealed, gk, &owner.payment_public(), ACCOUNT, &id, 1).unwrap()
     })
     .collect();
   let mut ledger = Ledger::new(random_signing_key());
@@ -65,6 +75,8 @@ fn onboard() -> World {
     rk_public: *rk.verifying_key(),
     owner,
     shop,
+    guardian_keys,
+    sealed_shares,
     opened,
     ledger,
   }
@@ -93,6 +105,27 @@ fn recover(world: &World, idx: &[usize]) -> Result<(Device, RecoveryCert), Recov
     &world.rk_public,
     b"attest".to_vec(),
   )
+}
+
+fn recover_from_guardians(
+  world: &World,
+  idx: &[usize],
+) -> Result<(Device, RecoveryCert), RecoveryError> {
+  let opened: Vec<Vec<u8>> = idx
+    .iter()
+    .map(|i| {
+      let id = format!("g{i}");
+      open(
+        &world.sealed_shares[*i],
+        &world.guardian_keys[*i],
+        &world.owner.payment_public(),
+        ACCOUNT,
+        &id,
+        1,
+      )
+    })
+    .collect::<Result<_, _>>()?;
+  Device::recover(ACCOUNT, 1, &opened, &world.rk_public, b"attest".to_vec())
 }
 
 /// Fresh recovery cert (new device key each time) submitted at `now`; returns cert + request_no.
@@ -139,12 +172,14 @@ fn pv_rec_01_three_of_five_reconstructs_20_of_20_offline() {
   let world = onboard();
   let server = world.ledger.server_public();
   let snapshot = world.ledger.snapshot();
-  for _ in 0..20 {
-    let (mut device, cert) = recover(&world, &random_subset(3)).unwrap();
+  for attempt in 0..20 {
+    let (mut device, cert) = recover_from_guardians(&world, &random_subset(3)).unwrap();
     assert_eq!((cert.old_epoch, cert.new_epoch), (1, 2));
+    assert_eq!(cert.account_id, ACCOUNT);
+    verify(&world.rk_public, &cert.signed_bytes(), &cert.signature).unwrap();
     // test payment to the new device, verified against the signed snapshot
     device
-      .receive(shop_pays_account(&world, 9), &snapshot, &server, 0)
+      .receive(shop_pays_account(&world, attempt), &snapshot, &server, 0)
       .unwrap();
     // limitation: the old balance cannot be spent offline (100%)
     assert_eq!(device.spend_offline(1), Err(RecoveryError::NoAllowance));
@@ -410,6 +445,35 @@ fn recovery_rotates_epoch_and_revokes_old_key() {
     world.ledger.deposit(&two, 120 * HOUR + 1),
     Err(RecoveryError::Expired)
   );
+}
+
+#[test]
+fn pv_rec_03_updated_snapshot_rejects_100_old_payments_but_deposits_them() {
+  let mut world = onboard();
+  let old_key = world.owner.payment_key.clone();
+  let server = world.ledger.server_public();
+  let mut old_cheques = Vec::new();
+  for id in 0..100 {
+    world.ledger.reserve(ACCOUNT, 1, id, 1, FAR, 0).unwrap();
+    old_cheques.push(cheque(id, 1, 1, FAR, &old_key));
+  }
+
+  let (_, cert) = recover(&world, &[0, 2, 4]).unwrap();
+  world.ledger.submit_recovery(cert, HOUR).unwrap();
+  let active = HOUR + T_REC;
+  world.ledger.activate(ACCOUNT, active).unwrap();
+  let snapshot = world.ledger.snapshot();
+  assert_eq!(snapshot.accounts.get(ACCOUNT).unwrap().0, 2);
+  let mut shop = Device::new("shop", 1);
+
+  for old_cheque in &old_cheques {
+    assert_eq!(
+      shop.receive(old_cheque.clone(), &snapshot, &server, active),
+      Err(RecoveryError::Revoked)
+    );
+    assert_eq!(world.ledger.deposit(old_cheque, active + HOUR), Ok(()));
+  }
+  assert!(shop.received.is_empty());
 }
 
 #[test]
@@ -706,6 +770,102 @@ fn cancel_rate_limit_and_block() {
     world.ledger.submit_recovery(next, t + T_REC + DAY),
     Err(RecoveryError::RateLimited)
   );
+}
+
+#[test]
+fn pv_rec_05_timelock_cancel_and_notice_hold_for_50_requests() {
+  let mut world = onboard();
+  let server = world.ledger.server_public();
+  let mut now = 0;
+
+  for case in 0..50 {
+    let (cert, request_no) = submit(&mut world, now);
+    let pending_snapshot = world.ledger.snapshot();
+    assert_eq!(
+      pending_snapshot.pending_recovery_accounts,
+      vec![ACCOUNT.to_owned()],
+      "old device notice missing in case {case}"
+    );
+    verify(
+      &server,
+      &pending_snapshot.signed_bytes(),
+      &pending_snapshot.signature,
+    )
+    .unwrap();
+
+    assert_eq!(
+      world.ledger.activate(ACCOUNT, now + T_REC - 1),
+      Err(RecoveryError::TimeLockActive)
+    );
+    for epoch in [1, 2] {
+      assert_eq!(
+        world
+          .ledger
+          .reserve(ACCOUNT, epoch, case, 1, now + T_REC + HOUR, now),
+        Err(RecoveryError::Frozen),
+        "epoch {epoch} received a talon before T_rec in case {case}"
+      );
+    }
+
+    let other_key_cancel =
+      RecoveryCancel::sign(&world.shop.payment_key, ACCOUNT, 1, &cert, request_no);
+    assert_eq!(
+      world.ledger.cancel(&other_key_cancel, now + HOUR),
+      Err(RecoveryError::BadSignature)
+    );
+    let other_account_cancel =
+      RecoveryCancel::sign(&world.shop.payment_key, "shop", 1, &cert, request_no);
+    assert_eq!(
+      world.ledger.cancel(&other_account_cancel, now + HOUR),
+      Err(RecoveryError::NoPending)
+    );
+    assert_eq!(world.ledger.pending_request_no(ACCOUNT), Some(request_no));
+
+    let cancel_at = now + T_REC - 1;
+    world
+      .ledger
+      .cancel(&cancel_for(&world, &cert, request_no), cancel_at)
+      .unwrap();
+    assert_eq!(world.ledger.pending_request_no(ACCOUNT), None);
+    assert!(world.ledger.snapshot().pending_recovery_accounts.is_empty());
+    now += RATE_WINDOW;
+  }
+}
+
+#[test]
+fn pv_rec_05_second_effective_recovery_is_refused_for_50_cycles() {
+  let mut world = onboard();
+  let mut submitted_at = 0;
+
+  for epoch in 1..=50 {
+    let (_, cert) = Device::recover(
+      ACCOUNT,
+      epoch,
+      &pick(&world, &[0, 1, 2]),
+      &world.rk_public,
+      b"attest".to_vec(),
+    )
+    .unwrap();
+    world.ledger.submit_recovery(cert, submitted_at).unwrap();
+    let effective_at = submitted_at + T_REC;
+    world.ledger.activate(ACCOUNT, effective_at).unwrap();
+    assert_eq!(world.ledger.epoch(ACCOUNT), Some(epoch + 1));
+
+    let (_, second_cert) = Device::recover(
+      ACCOUNT,
+      epoch + 1,
+      &pick(&world, &[0, 1, 2]),
+      &world.rk_public,
+      b"attest".to_vec(),
+    )
+    .unwrap();
+    assert_eq!(
+      world.ledger.submit_recovery(second_cert, effective_at + 1),
+      Err(RecoveryError::RateLimited)
+    );
+
+    submitted_at = effective_at + RATE_WINDOW;
+  }
 }
 
 #[test]
