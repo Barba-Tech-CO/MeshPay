@@ -39,6 +39,7 @@ class DtnGossipSession {
   int _cursor = 0;
   int _rounds = 0;
   bool _isSummarized = false;
+  Uint8List _pairKey = Uint8List(0);
 
   void startConnection() {
     _connection = null;
@@ -72,8 +73,10 @@ class DtnGossipSession {
 
   /// Initiator side; [exchange] sends one plaintext frame and returns the
   /// decrypted reply. Returns true when the link was lost.
+  /// [pairKey] is the established link's Noise peer pair key.
   Future<bool> sync(
     Future<Uint8List> Function(Uint8List plaintext) exchange,
+    Uint8List pairKey,
   ) async {
     if (_isSummarized) {
       error =
@@ -82,6 +85,7 @@ class DtnGossipSession {
       return false;
     }
     error = null;
+    _pairKey = pairKey;
     _onChanged();
     var linkLost = false;
     try {
@@ -100,7 +104,9 @@ class DtnGossipSession {
   Future<void> handle(
     Uint8List dtnFramePayload,
     Future<void> Function(Uint8List plaintext) send,
+    Uint8List pairKey,
   ) async {
+    _pairKey = pairKey;
     final Uint8List reply;
     try {
       final message = DtnMessageHelper.decode(dtnFramePayload);
@@ -149,7 +155,9 @@ class DtnGossipSession {
       }
     }
 
-    final connection = _connection ??= await _buffer.openSession();
+    final connection = _connection ??= await _buffer.openSession(
+      originPair: _pairKey,
+    );
     _isSummarized = true;
     final peerSummary = DtnMessageHelper.decodeSummary(
       await ask(
@@ -193,7 +201,7 @@ class DtnGossipSession {
       throw const TxLabException(TxErrorCode.dtnSummaryRepeated);
     }
     _isSummarized = true;
-    _connection ??= await _buffer.openSession();
+    _connection ??= await _buffer.openSession(originPair: _pairKey);
     await _planOutbound(peerSummary);
     return DtnMessageHelper.encode(
       DtnMessageKind.summary,

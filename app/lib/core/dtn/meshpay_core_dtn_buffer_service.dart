@@ -29,8 +29,11 @@ class MeshpayCoreDtnBufferService implements DtnBufferService {
       (await _buffer).missingFrom(peerSummary: peerSummary);
 
   @override
-  Future<DtnSessionService> openSession() async =>
-      MeshpayCoreDtnSessionService((await _buffer).openSession());
+  Future<DtnSessionService> openSession({
+    required Uint8List originPair,
+  }) async => MeshpayCoreDtnSessionService(
+    (await _buffer).openSession(originPair: originPair),
+  );
 
   @override
   Future<void> addTestEnvelope(Uint8List payload) async {
@@ -40,7 +43,10 @@ class MeshpayCoreDtnBufferService implements DtnBufferService {
       ttlHops: 4,
       knownRevocationVersion: BigInt.zero,
     );
-    await (await openSession()).ingest(envelope);
+    await (await _buffer).ingestLocal(
+      envelope: envelope,
+      nowUnix: BigInt.from(DateTime.now().millisecondsSinceEpoch ~/ 1000),
+    );
   }
 
   @override

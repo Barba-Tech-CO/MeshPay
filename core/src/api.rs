@@ -1,25 +1,33 @@
+use crate::acceptance_context::AcceptanceContext;
+use crate::cheque_acceptance::ChequeAcceptance;
 use crate::dtn_buffer::DtnEngine;
 use crate::dtn_ingest_outcome::IngestOutcome;
 use crate::dtn_peer_session::DtnPeerSession;
+use crate::dtn_snapshot::verify_snapshot;
 use crate::payer_tx_engine::PayerEngine;
 use crate::prepared_ack::PreparedAck;
 use crate::prepared_propose::PreparedPropose;
+use crate::protocol_clock::{MAX_FORWARD_JUMP_SECONDS, ProtocolClock, VerifiedServerTime};
+use crate::protocol_now::ProtocolNow;
+use crate::receiver_clock_row::ReceiverClockRow;
 use crate::receiver_tx_engine::ReceiverEngine;
-use crate::tx_keys::{compressed_public_key, signing_key_from_seed};
+use crate::tx_keys::{compressed_public_key, signing_key_from_seed, verifying_key_from_sec1};
 use crate::tx_wire::sync_envelope::SyncEnvelope;
 use flutter_rust_bridge::frb;
 use p256::ecdsa::{
-  Signature, SigningKey,
+  Signature, SigningKey, VerifyingKey,
   signature::{Signer, Verifier},
 };
 use prost::Message;
 use rusqlite::Connection;
-use snow::{Builder, HandshakeState, TransportState, params::NoiseParams};
+use snow::params::{DHChoice, NoiseParams};
+use snow::resolvers::{CryptoResolver, DefaultResolver};
+use snow::{Builder, HandshakeState, TransportState};
 use std::fs::{self, OpenOptions};
 use std::io;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 use zeroize::Zeroizing;
 
@@ -67,6 +75,8 @@ enum NoiseStage {
 
 pub struct NoiseSession {
   stage: NoiseStage,
+  is_initiator: bool,
+  local_public_key: Vec<u8>,
 }
 
 impl NoiseSession {
@@ -79,12 +89,11 @@ impl NoiseSession {
     // The initiator's own static is required by the XK pattern, not by the protocol of this app:
     // it is generated here and discarded with the session.
     let params = noise_xk_params()?;
-    let local_private_key = Builder::new(params.clone())
+    let local = Builder::new(params.clone())
       .generate_keypair()
-      .map_err(noise_error)?
-      .private;
+      .map_err(noise_error)?;
     let state = Builder::new(params)
-      .local_private_key(&local_private_key)
+      .local_private_key(&local.private)
       .and_then(|builder| builder.remote_public_key(&responder_public_key))
       .and_then(|builder| builder.prologue(&prologue))
       .and_then(|builder| builder.build_initiator())
@@ -92,6 +101,8 @@ impl NoiseSession {
 
     Ok(NoiseSession {
       stage: NoiseStage::Handshake(Box::new(state)),
+      is_initiator: true,
+      local_public_key: local.public,
     })
   }
 
@@ -105,15 +116,37 @@ impl NoiseSession {
       .and_then(|builder| builder.prologue(&prologue))
       .and_then(|builder| builder.build_responder())
       .map_err(noise_error)?;
+    let mut dh = DefaultResolver
+      .resolve_dh(&DHChoice::Curve25519)
+      .ok_or("noise: no X25519")?;
+    dh.set(&local_private_key);
 
     Ok(NoiseSession {
       stage: NoiseStage::Handshake(Box::new(state)),
+      is_initiator: false,
+      local_public_key: dh.pubkey().to_vec(),
     })
   }
 
   #[frb(sync)]
   pub fn is_finished(&self) -> bool {
     matches!(self.stage, NoiseStage::Transport(_))
+  }
+
+  /// Initiator static key || responder static key of the finished handshake: the same bytes on
+  /// both ends, authenticated by Noise. Key for `DtnBuffer::open_session`.
+  #[frb(sync)]
+  pub fn peer_pair_key(&self) -> Result<Vec<u8>, String> {
+    let NoiseStage::Transport(state) = &self.stage else {
+      return Err("noise handshake is not finished".to_owned());
+    };
+    let remote = state.get_remote_static().ok_or("noise: no remote static")?;
+    let local = self.local_public_key.as_slice();
+    Ok(if self.is_initiator {
+      [local, remote].concat()
+    } else {
+      [remote, local].concat()
+    })
   }
 
   pub fn write_message(&mut self, payload: Vec<u8>) -> Result<Vec<u8>, String> {
@@ -427,8 +460,11 @@ impl PayerTxEngine {
     spend_body: Vec<u8>,
     counter: u64,
     recipient_id: Vec<u8>,
+    stub: Vec<u8>,
   ) -> Result<Vec<u8>, String> {
-    self.engine.propose(&spend_body, counter, &recipient_id)
+    self
+      .engine
+      .propose(&spend_body, counter, &recipient_id, &stub)
   }
 
   /// External-signer mode (Android Keystore): no seed. `own_public_key` is the Keystore P-256
@@ -455,10 +491,11 @@ impl PayerTxEngine {
     spend_body: Vec<u8>,
     counter: u64,
     recipient_id: Vec<u8>,
+    stub: Vec<u8>,
   ) -> Result<PreparedPropose, String> {
     self
       .engine
-      .prepare_propose(&spend_body, counter, &recipient_id)
+      .prepare_propose(&spend_body, counter, &recipient_id, &stub)
   }
 
   /// External phase 2: verifies `signature` (raw 64 or DER), writes LOCKED_OUTGOING durably,
@@ -487,28 +524,43 @@ impl PayerTxEngine {
   }
 }
 
-/// Receiver side of the two-phase commit (PRD 6.5).
+/// Receiver side of the two-phase commit (PRD 6.5). Every new cheque is judged by the protocol
+/// clock anchored on the latest verified `RevocationSnapshot` (`t_srv` = its `issued_at_unix`);
+/// with no snapshot installed every cheque is refused.
+/// Largest snapshot `issued_at_unix` accepted, so `t_srv + MAX_FORWARD_JUMP_SECONDS + 1` and every
+/// persisted value still fit SQLite's i64.
+const MAX_STORED_UNIX: u64 = i64::MAX as u64 - MAX_FORWARD_JUMP_SECONDS - 1;
+
 pub struct ReceiverTxEngine {
   engine: ReceiverEngine,
+  snapshot_key: VerifyingKey,
+  expiry_secs: u64,
+  /// Serializes read-modify-write of the clock row persisted in the engine database.
+  clock_lock: Mutex<()>,
 }
 
 impl ReceiverTxEngine {
+  /// `snapshot_public_key` is the compressed P-256 SNAPSHOT role key; `expiry_secs` is `E`.
   pub fn open(
     db_path: String,
     db_key: Vec<u8>,
     signing_seed: Vec<u8>,
     payer_public_key: Vec<u8>,
     own_account_id: Vec<u8>,
+    snapshot_public_key: Vec<u8>,
+    expiry_secs: u64,
   ) -> Result<ReceiverTxEngine, String> {
-    Ok(ReceiverTxEngine {
-      engine: ReceiverEngine::open(
+    Self::with_engine(
+      ReceiverEngine::open(
         Path::new(&db_path),
         &db_key,
         &signing_seed,
         &payer_public_key,
         &own_account_id,
       )?,
-    })
+      &snapshot_public_key,
+      expiry_secs,
+    )
   }
 
   /// External-signer mode (Android Keystore): no seed. Flow: `store_propose`, `prepare_ack`,
@@ -519,26 +571,104 @@ impl ReceiverTxEngine {
     own_public_key: Vec<u8>,
     payer_public_key: Vec<u8>,
     own_account_id: Vec<u8>,
+    snapshot_public_key: Vec<u8>,
+    expiry_secs: u64,
   ) -> Result<ReceiverTxEngine, String> {
-    Ok(ReceiverTxEngine {
-      engine: ReceiverEngine::open_external(
+    Self::with_engine(
+      ReceiverEngine::open_external(
         Path::new(&db_path),
         &db_key,
         &own_public_key,
         &payer_public_key,
         &own_account_id,
       )?,
+      &snapshot_public_key,
+      expiry_secs,
+    )
+  }
+
+  fn with_engine(
+    engine: ReceiverEngine,
+    snapshot_public_key: &[u8],
+    expiry_secs: u64,
+  ) -> Result<ReceiverTxEngine, String> {
+    if !(ChequeAcceptance::MIN_EXPIRY_SECS..=ChequeAcceptance::MAX_EXPIRY_SECS)
+      .contains(&expiry_secs)
+    {
+      return Err("expiry E must be 24 to 168 hours".to_owned());
+    }
+    Ok(ReceiverTxEngine {
+      engine,
+      snapshot_key: verifying_key_from_sec1(snapshot_public_key)?,
+      expiry_secs,
+      clock_lock: Mutex::new(()),
     })
   }
 
+  /// Verifies `snapshot` with the SNAPSHOT key and anchors the protocol clock on its
+  /// `issued_at_unix` (monotonic reading from the native plugin). The state is persisted: an older
+  /// snapshot is refused, the same one is a no-op, a newer one always re-anchors and clears the
+  /// sticky reboot flag. No forward-jump cap: the SNAPSHOT signature is the trust root, and a cap
+  /// would turn an old-but-genuine first snapshot into a lockout after a long offline gap.
+  /// Residual: a validly signed far-future snapshot (leaked SNAPSHOT key) becomes a permanent
+  /// floor for "now"; that is a total compromise handled by the kill switch. Returns the held
+  /// snapshot's `issued_at_unix`.
+  pub fn install_snapshot(
+    &self,
+    snapshot: Vec<u8>,
+    monotonic_nanos: u64,
+    boot_count: Option<u64>,
+  ) -> Result<u64, String> {
+    let issued_at = verify_snapshot(&snapshot, &self.snapshot_key)?.issued_at_unix;
+    if issued_at > MAX_STORED_UNIX {
+      return Err("snapshot issued_at out of range".to_owned());
+    }
+    if i64::try_from(monotonic_nanos).is_err() {
+      return Err("monotonic reading out of range".to_owned());
+    }
+    let _guard = self.clock_lock()?;
+    let max_now_unix = match self.engine.load_clock()? {
+      Some(held) if issued_at < held.t_srv_unix => {
+        return Err("snapshot older than the held one".to_owned());
+      }
+      Some(held) if issued_at == held.t_srv_unix => return Ok(issued_at),
+      Some(held) => match Self::advance(&held, monotonic_nanos, boot_count) {
+        Some((row, _)) => issued_at.max(row.max_now_unix),
+        None => issued_at.max(held.max_now_unix),
+      },
+      None => issued_at,
+    };
+    self.engine.save_clock(&ReceiverClockRow {
+      t_srv_unix: issued_at,
+      anchor_unix: issued_at,
+      monotonic_nanos,
+      boot_count,
+      max_now_unix,
+      rebooted: false,
+    })?;
+    Ok(issued_at)
+  }
+
   /// Returns the `AckReceipt` bytes; the same propose twice returns the same ack.
-  pub fn on_propose(&self, propose: Vec<u8>) -> Result<Vec<u8>, String> {
-    self.engine.on_propose(&propose)
+  pub fn on_propose(
+    &self,
+    propose: Vec<u8>,
+    monotonic_nanos: u64,
+    boot_count: Option<u64>,
+  ) -> Result<Vec<u8>, String> {
+    let context = self.context(monotonic_nanos, boot_count)?;
+    self.engine.on_propose(&propose, &context)
   }
 
   /// Verifies and durably stores the propose (state RECEIVED); returns its tx_id.
-  pub fn store_propose(&self, propose: Vec<u8>) -> Result<Vec<u8>, String> {
-    self.engine.store_propose(&propose)
+  pub fn store_propose(
+    &self,
+    propose: Vec<u8>,
+    monotonic_nanos: u64,
+    boot_count: Option<u64>,
+  ) -> Result<Vec<u8>, String> {
+    let context = self.context(monotonic_nanos, boot_count)?;
+    self.engine.store_propose(&propose, &context)
   }
 
   pub fn prepare_ack(&self, tx_id: Vec<u8>) -> Result<PreparedAck, String> {
@@ -548,6 +678,86 @@ impl ReceiverTxEngine {
   /// Verifies `signature` (raw 64 or DER), persists and returns the `AckReceipt` bytes.
   pub fn finish_ack(&self, tx_id: Vec<u8>, signature: Vec<u8>) -> Result<Vec<u8>, String> {
     self.engine.finish_ack(&tx_id, &signature)
+  }
+
+  /// A suspected reboot (boot counter differs, `None` vs `Some` included, or monotonic below the
+  /// anchor) only tightens: it is persisted (sticky until a newer snapshot), "now" continues from
+  /// the largest "now" ever computed, and the `expires_at - t_srv <= E` bound applies. A reading
+  /// putting "now" more than `MAX_FORWARD_JUMP_SECONDS` past `t_srv` (bogus monotonic value) is
+  /// clamped just past that bound, so every cheque is refused as stale, and is never persisted.
+  fn context(
+    &self,
+    monotonic_nanos: u64,
+    boot_count: Option<u64>,
+  ) -> Result<AcceptanceContext, String> {
+    let _guard = self.clock_lock()?;
+    let held = self.engine.load_clock()?.ok_or("no revocation snapshot")?;
+    let now = match Self::advance(&held, monotonic_nanos, boot_count) {
+      Some((row, now)) => {
+        if row != held {
+          self.engine.save_clock(&row)?;
+        }
+        now
+      }
+      None => ProtocolNow {
+        unix: held.t_srv_unix + MAX_FORWARD_JUMP_SECONDS + 1,
+        t_srv_unix: held.t_srv_unix,
+        rebooted: true,
+      },
+    };
+    Ok(AcceptanceContext {
+      now,
+      snapshot_issued_at_unix: Some(held.t_srv_unix),
+      expiry_secs: self.expiry_secs,
+    })
+  }
+
+  /// Next persisted state and "now" for this reading; `None` when the reading would push "now"
+  /// beyond `t_srv + MAX_FORWARD_JUMP_SECONDS` (or the monotonic value cannot be stored).
+  fn advance(
+    held: &ReceiverClockRow,
+    monotonic_nanos: u64,
+    boot_count: Option<u64>,
+  ) -> Option<(ReceiverClockRow, ProtocolNow)> {
+    i64::try_from(monotonic_nanos).ok()?;
+    let reading = ProtocolClock::new(
+      VerifiedServerTime::from_verified_signature(held.anchor_unix),
+      held.monotonic_nanos,
+      held.boot_count,
+    )
+    .now(monotonic_nanos, boot_count);
+    let row = if reading.rebooted {
+      ReceiverClockRow {
+        anchor_unix: held.max_now_unix,
+        monotonic_nanos,
+        boot_count,
+        rebooted: true,
+        ..*held
+      }
+    } else {
+      ReceiverClockRow {
+        max_now_unix: reading.unix.max(held.max_now_unix),
+        ..*held
+      }
+    };
+    if row.max_now_unix > held.t_srv_unix + MAX_FORWARD_JUMP_SECONDS {
+      return None;
+    }
+    Some((
+      row,
+      ProtocolNow {
+        unix: row.max_now_unix,
+        t_srv_unix: held.t_srv_unix,
+        rebooted: row.rebooted,
+      },
+    ))
+  }
+
+  fn clock_lock(&self) -> Result<MutexGuard<'_, ()>, String> {
+    self
+      .clock_lock
+      .lock()
+      .map_err(|_| "receiver clock lock poisoned".to_owned())
   }
 }
 
@@ -627,11 +837,18 @@ impl DtnBuffer {
   }
 
   /// One session per connected peer; all inbound envelopes go through it (20 per connection).
+  /// `origin_pair` is `NoiseSession::peer_pair_key` of the authenticated link: envelopes count
+  /// toward that pair's daily cap.
   #[frb(sync)]
-  pub fn open_session(&self) -> DtnSession {
+  pub fn open_session(&self, origin_pair: Vec<u8>) -> DtnSession {
     DtnSession {
-      session: DtnPeerSession::new(Arc::clone(&self.engine)),
+      session: DtnPeerSession::with_origin_pair(Arc::clone(&self.engine), origin_pair),
     }
+  }
+
+  /// Stores an envelope created on this device (not from a peer, so no pair cap).
+  pub fn ingest_local(&self, envelope: Vec<u8>, now_unix: u64) -> Result<bool, String> {
+    DtnSession::outcome(self.engine.ingest(&envelope, now_unix)?)
   }
 
   /// Held envelope ids (32 bytes each), capped at 256.
@@ -673,7 +890,11 @@ impl DtnSession {
   /// `Ok(true)` stored, `Ok(false)` duplicate; every other outcome (invalid, refused, rate
   /// limited, session budget used up) is `Err(reason)`.
   pub fn ingest(&self, envelope: Vec<u8>, now_unix: u64) -> Result<bool, String> {
-    match self.session.ingest(&envelope, now_unix)? {
+    Self::outcome(self.session.ingest(&envelope, now_unix)?)
+  }
+
+  fn outcome(outcome: IngestOutcome) -> Result<bool, String> {
+    match outcome {
       IngestOutcome::Stored => Ok(true),
       IngestOutcome::Duplicate => Ok(false),
       rejected => Err(format!("envelope rejected: {rejected:?}")),

@@ -17,11 +17,13 @@ class FakeExternalPayerEngine implements PayerTxEngine {
     required List<int> spendBody,
     required BigInt counter,
     required List<int> recipientId,
+    required List<int> stub,
   }) async {
     calls.add('preparePropose');
     return PreparedPropose(
       message: Uint8List.fromList(<int>[1, 2, 3]),
       body: Uint8List.fromList(spendBody),
+      stub: Uint8List.fromList(stub),
       counter: counter,
       existingPropose: existingPropose,
     );
@@ -49,10 +51,32 @@ class FakeExternalReceiverEngine implements ReceiverTxEngine {
   final Uint8List txId = Uint8List.fromList(<int>[4, 4]);
   final Uint8List ackBytes = Uint8List.fromList(<int>[8, 8]);
   Uint8List? finishedSignature;
+  List<Object?>? installed;
+  List<Object?>? stored;
+  Object? installError;
 
   @override
-  Future<Uint8List> storePropose({required List<int> propose}) async {
+  Future<BigInt> installSnapshot({
+    required List<int> snapshot,
+    required BigInt monotonicNanos,
+    BigInt? bootCount,
+  }) async {
+    calls.add('installSnapshot');
+    if (installError case final error?) {
+      throw error;
+    }
+    installed = <Object?>[snapshot, monotonicNanos, bootCount];
+    return BigInt.zero;
+  }
+
+  @override
+  Future<Uint8List> storePropose({
+    required List<int> propose,
+    required BigInt monotonicNanos,
+    BigInt? bootCount,
+  }) async {
     calls.add('storePropose');
+    stored = <Object?>[propose, monotonicNanos, bootCount];
     return txId;
   }
 

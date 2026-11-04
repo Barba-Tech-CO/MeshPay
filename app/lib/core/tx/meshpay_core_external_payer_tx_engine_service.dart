@@ -51,6 +51,7 @@ class MeshpayCoreExternalPayerTxEngineService implements PayerTxEngineService {
     required Uint8List spendBody,
     required int counter,
     required Uint8List recipientId,
+    required Uint8List stub,
   }) => ExternalTxSigningHelper.propose(
     engine: _opened,
     signer: _signer,
@@ -58,6 +59,7 @@ class MeshpayCoreExternalPayerTxEngineService implements PayerTxEngineService {
     spendBody: spendBody,
     counter: BigInt.from(counter),
     recipientId: recipientId,
+    stub: stub,
   );
 
   @override

@@ -38,6 +38,9 @@ class NoiseL2capSession {
 
   bool get isEstablished => _noise.isFinished;
 
+  /// Authenticated key of this link's (initiator, responder) pair.
+  Uint8List get peerPairKey => _noise.peerPairKey;
+
   /// Handshake done and the channel still open.
   bool get isUsable => isEstablished && !isClosed;
 

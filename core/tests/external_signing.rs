@@ -1,3 +1,5 @@
+mod support;
+
 use meshpay_core::api::{PayerTxEngine, ReceiverTxEngine};
 use meshpay_core::payer_tx_engine::PayerEngine;
 use meshpay_core::receiver_tx_engine::ReceiverEngine;
@@ -149,7 +151,12 @@ fn payer_states(lab: &Lab) -> (i64, i64, i64) {
 
 fn propose_externally(lab: &Lab, payer: &PayerEngine, index: u64) -> Vec<u8> {
   let prepared = payer
-    .prepare_propose(&spend_body(index), index + 1, OWN_ACCOUNT)
+    .prepare_propose(
+      &spend_body(index),
+      index + 1,
+      OWN_ACCOUNT,
+      &support::stub_for(&spend_body(index)),
+    )
     .expect("prepare");
   payer
     .finish_propose(&prepared, &lab.payer.sign_der(&prepared.message))
@@ -157,7 +164,9 @@ fn propose_externally(lab: &Lab, payer: &PayerEngine, index: u64) -> Vec<u8> {
 }
 
 fn ack_externally(lab: &Lab, receiver: &ReceiverEngine, propose: &[u8]) -> Vec<u8> {
-  let tx_id = receiver.store_propose(propose).expect("store");
+  let tx_id = receiver
+    .store_propose(propose, &support::context())
+    .expect("store");
   let prepared = receiver.prepare_ack(&tx_id).expect("prepare ack");
   receiver
     .finish_ack(&tx_id, &lab.payee.sign_der(&prepared.message))
@@ -199,7 +208,12 @@ fn message_to_sign_is_domain_separated_body_with_tx_id() {
   let lab = Lab::new();
   let payer = lab.open_payer();
   let prepared = payer
-    .prepare_propose(&spend_body(0), 1, OWN_ACCOUNT)
+    .prepare_propose(
+      &spend_body(0),
+      1,
+      OWN_ACCOUNT,
+      &support::stub_for(&spend_body(0)),
+    )
     .unwrap();
   assert!(prepared.message.starts_with(b"meshpay/spend/v1"));
   assert_eq!(&prepared.message[16..], prepared.body.as_slice());
@@ -208,7 +222,9 @@ fn message_to_sign_is_domain_separated_body_with_tx_id() {
 
   let receiver = lab.open_receiver();
   let propose = propose_externally(&lab, &payer, 0);
-  let tx_id = receiver.store_propose(&propose).unwrap();
+  let tx_id = receiver
+    .store_propose(&propose, &support::context())
+    .unwrap();
   let ack = receiver.prepare_ack(&tx_id).unwrap();
   assert!(ack.message.starts_with(b"meshpay/ack/v1"));
   assert_eq!(&ack.message[14..46], tx_id.as_slice());
@@ -220,7 +236,12 @@ fn payer_rejects_wrong_key_tampered_message_and_garbage_signatures() {
   let lab = Lab::new();
   let payer = lab.open_payer();
   let prepared = payer
-    .prepare_propose(&spend_body(0), 1, OWN_ACCOUNT)
+    .prepare_propose(
+      &spend_body(0),
+      1,
+      OWN_ACCOUNT,
+      &support::stub_for(&spend_body(0)),
+    )
     .unwrap();
 
   let intruder = Keystore::new(5);
@@ -271,7 +292,9 @@ fn receiver_rejects_wrong_key_and_tampered_ack_signatures() {
   let payer = lab.open_payer();
   let receiver = lab.open_receiver();
   let propose = propose_externally(&lab, &payer, 0);
-  let tx_id = receiver.store_propose(&propose).unwrap();
+  let tx_id = receiver
+    .store_propose(&propose, &support::context())
+    .unwrap();
   let prepared = receiver.prepare_ack(&tx_id).unwrap();
 
   assert!(
@@ -307,7 +330,12 @@ fn crash_between_prepare_and_finish_leaves_nothing() {
   let lab = Lab::new();
   let payer = lab.open_payer();
   let prepared = payer
-    .prepare_propose(&spend_body(0), 1, OWN_ACCOUNT)
+    .prepare_propose(
+      &spend_body(0),
+      1,
+      OWN_ACCOUNT,
+      &support::stub_for(&spend_body(0)),
+    )
     .unwrap();
   drop(payer);
   assert_eq!(payer_rows(&lab), 0);
@@ -323,7 +351,9 @@ fn crash_between_prepare_and_finish_leaves_nothing() {
 
   let receiver = lab.open_receiver();
   let propose = propose_externally(&lab, &payer, 0);
-  let tx_id = receiver.store_propose(&propose).unwrap();
+  let tx_id = receiver
+    .store_propose(&propose, &support::context())
+    .unwrap();
   receiver.prepare_ack(&tx_id).unwrap();
   drop(receiver);
   assert_eq!(
@@ -344,7 +374,12 @@ fn redelivery_is_byte_identical_even_with_a_different_signature() {
 
   let propose = propose_externally(&lab, &payer, 0);
   let again = payer
-    .prepare_propose(&spend_body(0), 1, OWN_ACCOUNT)
+    .prepare_propose(
+      &spend_body(0),
+      1,
+      OWN_ACCOUNT,
+      &support::stub_for(&spend_body(0)),
+    )
     .unwrap();
   assert_eq!(again.existing_propose.as_deref(), Some(propose.as_slice()));
   // A fresh (randomized, in real Keystore) signature must not replace the stored one.
@@ -356,7 +391,11 @@ fn redelivery_is_byte_identical_even_with_a_different_signature() {
 
   let ack = ack_externally(&lab, &receiver, &propose);
   let prepared = receiver
-    .prepare_ack(&receiver.store_propose(&propose).unwrap())
+    .prepare_ack(
+      &receiver
+        .store_propose(&propose, &support::context())
+        .unwrap(),
+    )
     .unwrap();
   assert_eq!(prepared.existing_ack.as_deref(), Some(ack.as_slice()));
   assert_eq!(
@@ -382,12 +421,22 @@ fn same_counter_with_different_content_is_refused_in_external_mode() {
   };
   assert!(
     payer
-      .prepare_propose(&other.encode_to_vec(), 1, OWN_ACCOUNT)
+      .prepare_propose(
+        &other.encode_to_vec(),
+        1,
+        OWN_ACCOUNT,
+        &support::stub_for(&other.encode_to_vec())
+      )
       .is_err()
   );
   assert!(
     payer
-      .prepare_propose(&spend_body(0), 2, OWN_ACCOUNT)
+      .prepare_propose(
+        &spend_body(0),
+        2,
+        OWN_ACCOUNT,
+        &support::stub_for(&spend_body(0))
+      )
       .is_err()
   );
 }
@@ -398,12 +447,17 @@ fn external_engines_refuse_the_software_path_and_software_engines_still_work() {
   assert!(
     lab
       .open_payer()
-      .propose(&spend_body(0), 1, OWN_ACCOUNT)
+      .propose(
+        &spend_body(0),
+        1,
+        OWN_ACCOUNT,
+        &support::stub_for(&spend_body(0))
+      )
       .is_err()
   );
   let receiver = lab.open_receiver();
   let propose = propose_externally(&lab, &lab.open_payer(), 0);
-  assert!(receiver.on_propose(&propose).is_err());
+  assert!(receiver.on_propose(&propose, &support::context()).is_err());
   assert_eq!(
     query_i64(
       &lab.receiver_path(),
@@ -421,7 +475,14 @@ fn external_engines_refuse_the_software_path_and_software_engines_still_work() {
     &lab.payee.public_key(),
   )
   .unwrap();
-  let software_propose = software.propose(&spend_body(0), 1, OWN_ACCOUNT).unwrap();
+  let software_propose = software
+    .propose(
+      &spend_body(0),
+      1,
+      OWN_ACCOUNT,
+      &support::stub_for(&spend_body(0)),
+    )
+    .unwrap();
   let ack = ack_externally(&lab, &lab.open_receiver(), &software_propose);
   software.on_ack(&ack).unwrap();
 }
@@ -442,16 +503,26 @@ fn dart_facing_api_runs_the_external_exchange() {
     lab.payee.public_key(),
     lab.payer.public_key(),
     OWN_ACCOUNT.to_vec(),
+    support::snapshot_public_key(),
+    support::E,
   )
   .unwrap();
+  receiver
+    .install_snapshot(support::signed_snapshot(support::T_SRV), 0, None)
+    .unwrap();
 
   let prepared = payer
-    .prepare_propose(spend_body(0), 1, OWN_ACCOUNT.to_vec())
+    .prepare_propose(
+      spend_body(0),
+      1,
+      OWN_ACCOUNT.to_vec(),
+      support::stub_for(&spend_body(0)),
+    )
     .unwrap();
   let propose = payer
     .finish_propose(prepared.clone(), lab.payer.sign_der(&prepared.message))
     .unwrap();
-  let tx_id = receiver.store_propose(propose).unwrap();
+  let tx_id = receiver.store_propose(propose, 0, None).unwrap();
   let prepared_ack = receiver.prepare_ack(tx_id.clone()).unwrap();
   let ack = receiver
     .finish_ack(tx_id, lab.payee.sign_der(&prepared_ack.message))
@@ -472,7 +543,12 @@ fn two_hundred_crash_runs_in_external_mode() {
 
     // Failure point 0: crash after prepare, before finish. Nothing may exist; retry works.
     let prepared = payer
-      .prepare_propose(&spend_body(index), index + 1, OWN_ACCOUNT)
+      .prepare_propose(
+        &spend_body(index),
+        index + 1,
+        OWN_ACCOUNT,
+        &support::stub_for(&spend_body(index)),
+      )
       .unwrap();
     drop(payer);
     assert_eq!(payer_rows(&lab), 0, "run {index}: row before finish");
@@ -509,7 +585,9 @@ fn two_hundred_crash_runs_in_external_mode() {
       // Failure point 3: receiver crashes after store_propose, before any ack.
       3 => {
         let receiver = lab.open_receiver();
-        receiver.store_propose(&propose).unwrap();
+        receiver
+          .store_propose(&propose, &support::context())
+          .unwrap();
         drop(receiver);
         let receiver = lab.open_receiver();
         assert_eq!(
@@ -525,7 +603,9 @@ fn two_hundred_crash_runs_in_external_mode() {
       // Failure point 4: receiver crashes after prepare_ack, before finish_ack.
       4 => {
         let receiver = lab.open_receiver();
-        let tx_id = receiver.store_propose(&propose).unwrap();
+        let tx_id = receiver
+          .store_propose(&propose, &support::context())
+          .unwrap();
         let prepared_ack = receiver.prepare_ack(&tx_id).unwrap();
         drop(receiver);
         let receiver = lab.open_receiver();
@@ -595,7 +675,12 @@ fn high_s_der_is_accepted_and_stored_as_low_s() {
   let lab = Lab::new();
   let payer = lab.open_payer();
   let prepared = payer
-    .prepare_propose(&spend_body(0), 1, OWN_ACCOUNT)
+    .prepare_propose(
+      &spend_body(0),
+      1,
+      OWN_ACCOUNT,
+      &support::stub_for(&spend_body(0)),
+    )
     .unwrap();
   let propose = payer
     .finish_propose(&prepared, &lab.payer.sign_der_high_s(&prepared.message))
@@ -615,7 +700,9 @@ fn high_s_der_is_accepted_and_stored_as_low_s() {
   .unwrap();
 
   let receiver = lab.open_receiver();
-  let tx_id = receiver.store_propose(&propose).unwrap();
+  let tx_id = receiver
+    .store_propose(&propose, &support::context())
+    .unwrap();
   let ack_prepared = receiver.prepare_ack(&tx_id).unwrap();
   receiver
     .finish_ack(&tx_id, &lab.payee.sign_der_high_s(&ack_prepared.message))
@@ -627,7 +714,12 @@ fn malformed_signature_encodings_are_rejected() {
   let lab = Lab::new();
   let payer = lab.open_payer();
   let prepared = payer
-    .prepare_propose(&spend_body(0), 1, OWN_ACCOUNT)
+    .prepare_propose(
+      &spend_body(0),
+      1,
+      OWN_ACCOUNT,
+      &support::stub_for(&spend_body(0)),
+    )
     .unwrap();
   let der = lab.payer.sign_der(&prepared.message);
   let raw = lab.payer.sign_raw(&prepared.message);
@@ -687,7 +779,12 @@ fn compressed_key_is_accepted_and_identity_or_off_curve_keys_are_refused() {
   )
   .expect("compressed key");
   let prepared = payer
-    .prepare_propose(&spend_body(0), 1, OWN_ACCOUNT)
+    .prepare_propose(
+      &spend_body(0),
+      1,
+      OWN_ACCOUNT,
+      &support::stub_for(&spend_body(0)),
+    )
     .unwrap();
   payer
     .finish_propose(&prepared, &lab.payer.sign_der(&prepared.message))
@@ -718,7 +815,12 @@ fn handle_with_another_body_and_its_correct_tx_id_fails_on_the_signature() {
   let lab = Lab::new();
   let payer = lab.open_payer();
   let signed = payer
-    .prepare_propose(&spend_body(0), 1, OWN_ACCOUNT)
+    .prepare_propose(
+      &spend_body(0),
+      1,
+      OWN_ACCOUNT,
+      &support::stub_for(&spend_body(0)),
+    )
     .unwrap();
   let other_body = ChequeSpendBody {
     amount_units: 777,
@@ -766,7 +868,12 @@ fn child_finish_propose_loop() {
   println!("ready");
   for counter in start..start + 5000 {
     let prepared = engine
-      .prepare_propose(&spend_body(counter - 1), counter, OWN_ACCOUNT)
+      .prepare_propose(
+        &spend_body(counter - 1),
+        counter,
+        OWN_ACCOUNT,
+        &support::stub_for(&spend_body(counter - 1)),
+      )
       .unwrap();
     engine
       .finish_propose(&prepared, &payer.sign_der(&prepared.message))
@@ -781,6 +888,7 @@ fn forged_propose(lab: &Lab, index: u64) -> Vec<u8> {
     body_with_tx_id(&body, &derive_tx_id(index + 1, &body).unwrap()).unwrap()
   };
   TxPropose {
+    stub: Some(support::stub_message_for(&body_bytes)),
     spend: Some(ChequeSpend {
       payer_signature: lab.payer.sign_raw(&spend_signing_message(&body_bytes)),
       body: body_bytes,
@@ -913,7 +1021,12 @@ fn sigkill_during_finish_propose_never_leaves_a_half_written_or_duplicated_chequ
       )
       .unwrap_or_else(|error| panic!("run {run}: stored signature invalid: {error}"));
       let prepared = payer
-        .prepare_propose(&spend_body(counter - 1), counter, OWN_ACCOUNT)
+        .prepare_propose(
+          &spend_body(counter - 1),
+          counter,
+          OWN_ACCOUNT,
+          &support::stub_for(&spend_body(counter - 1)),
+        )
         .unwrap();
       assert_eq!(
         prepared.existing_propose.as_ref(),
@@ -975,7 +1088,9 @@ fn sigkill_during_finish_ack_never_leaves_a_half_written_or_duplicated_ack() {
     );
     for index in (0..count as u64).rev().take(20) {
       let propose = forged_propose(&lab, index);
-      let tx_id = receiver.store_propose(&propose).unwrap();
+      let tx_id = receiver
+        .store_propose(&propose, &support::context())
+        .unwrap();
       let prepared = receiver.prepare_ack(&tx_id).unwrap();
       let ack = receiver
         .finish_ack(&tx_id, &lab.payee.sign_der(&prepared.message))

@@ -2,16 +2,23 @@ import 'dart:typed_data';
 
 import 'package:meshpay_core/meshpay_core.dart';
 
+import '../ble/native_lab_service.dart';
+import '../dtn/dtn_buffer_service.dart';
+import '../dtn/lab_dtn_snapshot_key_helper.dart';
 import '../storage/app_support_directory_service.dart';
+import 'lab_cheque_stub_helper.dart';
 import 'lab_tx_storage_helper.dart';
+import 'receiver_clock_helper.dart';
 import 'receiver_tx_engine_service.dart';
 
 class MeshpayCoreReceiverTxEngineService implements ReceiverTxEngineService {
-  MeshpayCoreReceiverTxEngineService(this._directory);
+  MeshpayCoreReceiverTxEngineService(this._directory, this._dtn, this._native);
 
   static const String _side = 'receiver';
 
   final AppSupportDirectoryService _directory;
+  final DtnBufferService _dtn;
+  final NativeLabService _native;
   ReceiverTxEngine? _engine;
 
   @override
@@ -28,13 +35,24 @@ class MeshpayCoreReceiverTxEngineService implements ReceiverTxEngineService {
       signingSeed: keys.seed,
       payerPublicKey: payerPublicKey,
       ownAccountId: keys.publicKey,
+      snapshotPublicKey: LabDtnSnapshotKeyHelper.publicKey(),
+      expirySecs: BigInt.from(LabChequeStubHelper.expirySeconds),
     );
   }
 
   @override
   Future<Uint8List> onPropose(Uint8List propose) async {
     final engine = _engine ?? (throw StateError('tx engine not open'));
-    return engine.onPropose(propose: propose);
+    final sample = await ReceiverClockHelper.prepare(
+      engine: engine,
+      dtn: _dtn,
+      native: _native,
+    );
+    return engine.onPropose(
+      propose: propose,
+      monotonicNanos: BigInt.from(sample.elapsedRealtimeNanos),
+      bootCount: ReceiverClockHelper.bootCount(sample),
+    );
   }
 
   @override

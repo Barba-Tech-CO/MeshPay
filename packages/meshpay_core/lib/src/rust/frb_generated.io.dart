@@ -150,6 +150,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PreparedPropose dco_decode_box_autoadd_prepared_propose(dynamic raw);
 
   @protected
+  BigInt dco_decode_box_autoadd_u_64(dynamic raw);
+
+  @protected
   CoreSelfcheck dco_decode_core_selfcheck(dynamic raw);
 
   @protected
@@ -166,6 +169,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   NoiseKeypair dco_decode_noise_keypair(dynamic raw);
+
+  @protected
+  BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
 
   @protected
   Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
@@ -299,6 +305,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
   CoreSelfcheck sse_decode_core_selfcheck(SseDeserializer deserializer);
 
   @protected
@@ -317,6 +326,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   NoiseKeypair sse_decode_noise_keypair(SseDeserializer deserializer);
+
+  @protected
+  BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
   Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
@@ -470,6 +482,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
+
+  @protected
   void sse_encode_core_selfcheck(CoreSelfcheck self, SseSerializer serializer);
 
   @protected
@@ -492,6 +507,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_noise_keypair(NoiseKeypair self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_list_prim_u_8_strict(

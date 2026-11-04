@@ -8,6 +8,8 @@ use crate::tx_keys::{
 use crate::tx_wire::ack_receipt::AckReceipt;
 use crate::tx_wire::cheque_spend::ChequeSpend;
 use crate::tx_wire::cheque_spend_body::ChequeSpendBody;
+use crate::tx_wire::cheque_stub::ChequeStub;
+use crate::tx_wire::cheque_stub_body::ChequeStubBody;
 use crate::tx_wire::tx_propose::TxPropose;
 use p256::ecdsa::{SigningKey, VerifyingKey};
 use prost::Message;
@@ -85,14 +87,16 @@ impl PayerEngine {
     spend_body: &[u8],
     counter: u64,
     recipient_id: &[u8],
+    stub: &[u8],
   ) -> Result<Vec<u8>, String> {
     let signing_key = self
       .signing_key
       .as_ref()
       .ok_or("external signer: use prepare_propose and finish_propose")?;
     let plan = SpendPlan::new(spend_body, counter, recipient_id)?;
+    let stub = cheque_stub_for(stub, &plan.body)?;
     let signature = sign(signing_key, &spend_signing_message(&plan.body_bytes));
-    self.persist(&plan, counter, signature)
+    self.persist(&plan, counter, signature, stub)
   }
 
   /// External phase 1: validates, derives tx_id and returns the message to sign. Read-only.
@@ -101,8 +105,10 @@ impl PayerEngine {
     spend_body: &[u8],
     counter: u64,
     recipient_id: &[u8],
+    stub: &[u8],
   ) -> Result<PreparedPropose, String> {
     let plan = SpendPlan::new(spend_body, counter, recipient_id)?;
+    cheque_stub_for(stub, &plan.body)?;
     let existing_propose = Self::existing(
       &*self.connection()?,
       to_sql_integer(counter)?,
@@ -112,6 +118,7 @@ impl PayerEngine {
     Ok(PreparedPropose {
       message: spend_signing_message(&plan.body_bytes),
       body: plan.body_bytes,
+      stub: stub.to_vec(),
       counter,
       existing_propose,
     })
@@ -128,12 +135,13 @@ impl PayerEngine {
     let body =
       ChequeSpendBody::decode(prepared.body.as_slice()).map_err(|e| format!("spend body: {e}"))?;
     let plan = SpendPlan::new(&prepared.body, prepared.counter, &body.payee_account_id)?;
+    let stub = cheque_stub_for(&prepared.stub, &plan.body)?;
     let raw = verify_normalized(
       &self.own_key,
       &spend_signing_message(&plan.body_bytes),
       signature,
     )?;
-    self.persist(&plan, prepared.counter, raw)
+    self.persist(&plan, prepared.counter, raw, stub)
   }
 
   /// Stored propose bytes for this exact content; error when the counter or cheque is taken by
@@ -164,6 +172,7 @@ impl PayerEngine {
     plan: &SpendPlan,
     counter: u64,
     payer_signature: Vec<u8>,
+    stub: ChequeStub,
   ) -> Result<Vec<u8>, String> {
     let counter_sql = to_sql_integer(counter)?;
     let amount_sql = to_sql_integer(plan.body.amount_units)?;
@@ -183,7 +192,11 @@ impl PayerEngine {
       payer_signature,
       body: plan.body_bytes.clone(),
     };
-    let propose_bytes = TxPropose { spend: Some(spend) }.encode_to_vec();
+    let propose_bytes = TxPropose {
+      stub: Some(stub),
+      spend: Some(spend),
+    }
+    .encode_to_vec();
     if propose_bytes.len() > MAX_PROPOSE_BYTES {
       return Err("propose exceeds the size cap".to_owned());
     }
@@ -282,4 +295,15 @@ impl PayerEngine {
       .lock()
       .map_err(|_| "database lock poisoned".to_owned())
   }
+}
+
+/// Server-issued `ChequeStub` bytes for this spend: must decode and name the same cheque.
+fn cheque_stub_for(stub: &[u8], spend: &ChequeSpendBody) -> Result<ChequeStub, String> {
+  let decoded = ChequeStub::decode(stub).map_err(|e| format!("stub: {e}"))?;
+  let body =
+    ChequeStubBody::decode(decoded.body.as_slice()).map_err(|e| format!("stub body: {e}"))?;
+  if body.cheque_id != spend.cheque_id {
+    return Err("stub names a different cheque".to_owned());
+  }
+  Ok(decoded)
 }

@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meshpay/core/tx/external_tx_signing_helper.dart';
+import 'package:meshpay_native/clock_sample.dart';
 
 import '../../fakes/fake_external_tx_engines.dart';
 import '../../fakes/fake_payment_key_signer.dart';
@@ -23,15 +24,22 @@ void main() {
         spendBody: Uint8List.fromList(<int>[1]),
         counter: BigInt.one,
         recipientId: Uint8List(65),
+        stub: Uint8List(0),
       );
 
-  Future<Uint8List> acknowledge(FakeExternalReceiverEngine engine) =>
-      ExternalTxSigningHelper.acknowledge(
-        engine: engine,
-        signer: signer,
-        alias: 'lab_receiver',
-        propose: Uint8List.fromList(<int>[1]),
-      );
+  Future<Uint8List> acknowledge(
+    FakeExternalReceiverEngine engine, {
+    ClockSample clock = const ClockSample(
+      elapsedRealtimeNanos: 1,
+      bootCount: null,
+    ),
+  }) => ExternalTxSigningHelper.acknowledge(
+    engine: engine,
+    signer: signer,
+    alias: 'lab_receiver',
+    propose: Uint8List.fromList(<int>[1]),
+    clock: clock,
+  );
 
   test('payer prepares, signs the prepared message, then finishes', () async {
     final engine = FakeExternalPayerEngine(calls);
@@ -86,5 +94,41 @@ void main() {
     expect(result, stored);
     expect(calls, <String>['storePropose', 'prepareAck']);
     expect(signer.calls, isEmpty);
+  });
+
+  test('receiver passes the clock sample to storePropose', () async {
+    final engine = FakeExternalReceiverEngine(calls);
+
+    await acknowledge(
+      engine,
+      clock: const ClockSample(
+        elapsedRealtimeNanos: 123456789012,
+        bootCount: 31,
+      ),
+    );
+
+    expect(engine.stored, <Object?>[
+      <int>[1],
+      BigInt.from(123456789012),
+      BigInt.from(31),
+    ]);
+  });
+
+  test('receiver passes a null boot count through as null', () async {
+    final engine = FakeExternalReceiverEngine(calls);
+
+    await acknowledge(
+      engine,
+      clock: const ClockSample(
+        elapsedRealtimeNanos: 987654321,
+        bootCount: null,
+      ),
+    );
+
+    expect(engine.stored, <Object?>[
+      <int>[1],
+      BigInt.from(987654321),
+      null,
+    ]);
   });
 }

@@ -4,7 +4,11 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meshpay/core/ble/l2cap_frame_codec.dart';
 import 'package:meshpay/core/noise/noise_l2cap_session.dart';
+import 'package:meshpay/core/server/codec/proto_reader_helper.dart';
 import 'package:meshpay/core/server/messages/cheque_spend_body.dart';
+import 'package:meshpay/core/server/messages/cheque_stub.dart';
+import 'package:meshpay/core/server/messages/cheque_stub_body.dart';
+import 'package:meshpay/core/tx/lab_cheque_stub_helper.dart';
 import 'package:meshpay/core/tx/lab_frame_helper.dart';
 import 'package:meshpay/core/tx/payer_tx_lab_flow.dart';
 import 'package:meshpay/core/tx/tx_error_code.dart';
@@ -110,6 +114,32 @@ void main() {
     ]);
   });
 
+  test('propose carries a stub for the same cheque expiring E later', () async {
+    await flow.sendCheque();
+
+    final stub = ChequeStubBody.fromBytes(
+      ChequeStub.fromBytes(engine.stubs.single).body,
+    );
+    var chequeId = Uint8List(0);
+    var signedAtUnix = 0;
+    ProtoReaderHelper.read(engine.spendBodies.single, (field, reader) {
+      switch (field) {
+        case 1:
+          chequeId = reader.readBytes();
+        case 7:
+          signedAtUnix = reader.readUint64().toInt();
+        default:
+          return false;
+      }
+      return true;
+    });
+    expect(stub.chequeId, chequeId);
+    expect(
+      stub.expiresAtUnix,
+      signedAtUnix + LabChequeStubHelper.expirySeconds,
+    );
+  });
+
   test('accepts a 65-byte Keystore key from the receiver HELLO', () async {
     final key = <int>[4, ...List<int>.filled(64, 7)];
     peer.onMessage = (kind, payload) async => kind == TxLabMessageKind.hello
@@ -175,6 +205,7 @@ void main() {
         ).toBytes(),
         counter: counter,
         recipientId: Uint8List(1),
+        stub: Uint8List(0),
       );
     }
     peer.onMessage = (kind, payload) async => kind == TxLabMessageKind.hello

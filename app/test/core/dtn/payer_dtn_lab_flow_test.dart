@@ -6,6 +6,8 @@ import 'package:meshpay/core/dtn/payer_dtn_lab_flow.dart';
 
 import '../../fakes/fake_dtn_buffer_service.dart';
 
+final Uint8List pairKey = Uint8List.fromList(<int>[1, 2, 3]);
+
 void main() {
   test('a call made while another runs is ignored', () async {
     final buffer = FakeDtnBufferService();
@@ -14,10 +16,10 @@ void main() {
     final first = flow.sync((_) async {
       await release.future;
       throw StateError('link down');
-    });
+    }, pairKey);
     await Future<void>.delayed(Duration.zero);
 
-    final second = await flow.sync((_) async => Uint8List(0));
+    final second = await flow.sync((_) async => Uint8List(0), pairKey);
     await flow.createTestEnvelope();
     release.complete();
     final firstLinkLost = await first;

@@ -25,8 +25,10 @@ class PayerDtnLabFlow {
   Future<void> createTestEnvelope() => _guard(_gossip.createTestEnvelope, null);
 
   /// Returns true when the link was lost (caller must tear the session down).
-  Future<bool> sync(Future<Uint8List> Function(Uint8List plaintext) exchange) =>
-      _guard(() => _gossip.sync(exchange), false);
+  Future<bool> sync(
+    Future<Uint8List> Function(Uint8List plaintext) exchange,
+    Uint8List pairKey,
+  ) => _guard(() => _gossip.sync(exchange, pairKey), false);
 
   Future<T> _guard<T>(Future<T> Function() action, T whenBusy) async {
     if (_isRunning) {

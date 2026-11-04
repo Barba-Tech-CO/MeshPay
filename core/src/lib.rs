@@ -1,3 +1,4 @@
+pub mod acceptance_context;
 pub mod api;
 pub mod cheque_acceptance;
 pub mod dtn_buffer;
@@ -10,6 +11,7 @@ pub mod prepared_ack;
 pub mod prepared_propose;
 pub mod protocol_clock;
 pub mod protocol_now;
+pub mod receiver_clock_row;
 pub mod receiver_tx_engine;
 mod spend_plan;
 pub mod tx_database;
