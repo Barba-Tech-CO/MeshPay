@@ -47,6 +47,8 @@ services:
     secrets:
       - server_signing_key
       - server_key_cert
+      - server_snapshot_key
+      - server_snapshot_key_cert
       - attestation_roots
       - attestation_revoked
     environment:
@@ -56,6 +58,8 @@ services:
       SERVER_SIGNING_KEY_FILE: ${SERVER_SIGNING_KEY_FILE}
       SERVER_KEY_CERT_FILE: ${SERVER_KEY_CERT_FILE}
       SERVER_ROOT_PUBLIC_KEY_HEX: ${SERVER_ROOT_PUBLIC_KEY_HEX}
+      SERVER_SNAPSHOT_KEY_FILE: ${SERVER_SNAPSHOT_KEY_FILE}
+      SERVER_SNAPSHOT_KEY_CERT_FILE: ${SERVER_SNAPSHOT_KEY_CERT_FILE}
       CAP_CHEQUE_UNITS: ${CAP_CHEQUE_UNITS}
       CAP_RESERVE_UNITS: ${CAP_RESERVE_UNITS}
       CHEQUE_MAX_COUNT: ${CHEQUE_MAX_COUNT}
@@ -66,6 +70,7 @@ services:
       REGISTER_LIMIT_PER_MINUTE: ${REGISTER_LIMIT_PER_MINUTE}
       CHALLENGE_LIMIT_PER_MINUTE: ${CHALLENGE_LIMIT_PER_MINUTE}
       CONTROL_LIMIT_PER_MINUTE: ${CONTROL_LIMIT_PER_MINUTE}
+      PUBLIC_READ_LIMIT_PER_MINUTE: ${PUBLIC_READ_LIMIT_PER_MINUTE}
       ATTESTATION_ROOTS_PEM_FILE: ${ATTESTATION_ROOTS_PEM_FILE}
       ATTESTATION_REVOCATION_FILE: ${ATTESTATION_REVOCATION_FILE}
       ATTESTATION_CHALLENGE_TTL_SECONDS: ${ATTESTATION_CHALLENGE_TTL_SECONDS}
@@ -83,6 +88,10 @@ secrets:
     file: ./server/secrets/server_signing_key.hex
   server_key_cert:
     file: ./server/secrets/server_key_cert.hex
+  server_snapshot_key:
+    file: ./server/secrets/server_snapshot_key.hex
+  server_snapshot_key_cert:
+    file: ./server/secrets/server_snapshot_key_cert.hex
   attestation_roots:
     file: ./server/secrets/attestation_roots.pem
   attestation_revoked:
