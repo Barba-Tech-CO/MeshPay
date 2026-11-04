@@ -129,10 +129,23 @@ pub fn snapshot_public_key() -> Vec<u8> {
   compressed_public_key(&signing_key_from_seed(&SNAPSHOT_SEED).unwrap())
 }
 
+pub fn issuer_key_id() -> Vec<u8> {
+  ISSUER_KEY_ID.clone()
+}
+
 pub fn signed_snapshot(issued_at_unix: u64) -> Vec<u8> {
+  signed_snapshot_revoking(issued_at_unix, 1, Vec::new())
+}
+
+pub fn signed_snapshot_revoking(
+  issued_at_unix: u64,
+  version: u64,
+  revoked_server_key_ids: Vec<Vec<u8>>,
+) -> Vec<u8> {
   let mut snapshot = RevocationSnapshot {
-    version: 1,
+    version,
     issued_at_unix,
+    revoked_server_key_ids,
     ..Default::default()
   };
   let key = signing_key_from_seed(&SNAPSHOT_SEED).unwrap();
