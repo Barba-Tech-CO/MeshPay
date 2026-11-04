@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:meshpay_core/meshpay_core.dart';
 
 import '../../storage/app_support_directory_service.dart';
 import '../../tx/issuer_config_helper.dart';
@@ -35,7 +36,8 @@ class ServerTrustService {
 
   /// Set once a refetch failed to extend validity, so a server stuck on a
   /// near-expiry cert cannot be polled again by this process.
-  bool _refetchWithoutExtension = false;
+  bool _issuerRefetchWithoutExtension = false;
+  bool _snapshotRefetchWithoutExtension = false;
 
   /// Release fails closed without `--dart-define=SERVER_BASE_URL`.
   String get baseUrl {
@@ -52,7 +54,19 @@ class ServerTrustService {
   /// the server's root differs; an offline refetch falls back to the stored
   /// cert only while it is still unexpired.
   Future<Uint8List> issuerCert() async {
-    final file = File('${await _directory.getPath()}/issuer_cert.bin');
+    return serverCert(snapshot: false);
+  }
+
+  Future<Uint8List> snapshotCert() async {
+    return serverCert(snapshot: true);
+  }
+
+  Future<Uint8List> serverCert({required bool snapshot}) async {
+    final certName = snapshot ? 'snapshot' : 'issuer';
+    final file = File('${await _directory.getPath()}/${certName}_cert.bin');
+    final refetchWithoutExtension = snapshot
+        ? _snapshotRefetchWithoutExtension
+        : _issuerRefetchWithoutExtension;
     Uint8List? stored;
     var storedNotAfterUnix = 0;
     if (file.existsSync()) {
@@ -70,7 +84,7 @@ class ServerTrustService {
         storedNotAfterUnix - nowUnix > _refreshWindow.inSeconds) {
       return stored;
     }
-    if (_refetchWithoutExtension &&
+    if (refetchWithoutExtension &&
         stored != null &&
         storedNotAfterUnix > nowUnix) {
       return stored;
@@ -78,20 +92,32 @@ class ServerTrustService {
     try {
       final response = await _client.getServerKey(baseUrl);
       if (!listEquals(response.rootPublicKey, await pinnedRoot())) {
-        throw StateError('Server issuer root does not match the pinned root.');
+        throw StateError(
+          'Server $certName root does not match the pinned root.',
+        );
       }
+      final fetchedCert = snapshot
+          ? response.snapshotCert
+          : response.issuerCert;
       final fetchedNotAfterUnix = ServerKeyCertSummary.fromBytes(
-        response.issuerCert,
+        fetchedCert,
       ).notAfterUnix;
       if (fetchedNotAfterUnix < storedNotAfterUnix) {
-        _refetchWithoutExtension = true;
-        return _unexpiredStoredOrThrow(stored, storedNotAfterUnix, nowUnix);
+        _setRefetchWithoutExtension(snapshot, true);
+        if (stored != null && storedNotAfterUnix > nowUnix) return stored;
+        throw StateError('No unexpired $certName cert is available.');
       }
-      await _replace(file, response.issuerCert);
+      if (snapshot) {
+        await verifySnapshotCert(
+          rootPublicKey: await pinnedRoot(),
+          cert: fetchedCert,
+        );
+      }
+      await _replace(file, fetchedCert);
       if (fetchedNotAfterUnix == storedNotAfterUnix) {
-        _refetchWithoutExtension = true;
+        _setRefetchWithoutExtension(snapshot, true);
       }
-      return response.issuerCert;
+      return fetchedCert;
     } on TimeoutException {
       if (stored != null && storedNotAfterUnix > nowUnix) return stored;
       rethrow;
@@ -101,13 +127,12 @@ class ServerTrustService {
     }
   }
 
-  Uint8List _unexpiredStoredOrThrow(
-    Uint8List? stored,
-    int storedNotAfterUnix,
-    int nowUnix,
-  ) {
-    if (stored != null && storedNotAfterUnix > nowUnix) return stored;
-    throw StateError('No unexpired issuer cert is available.');
+  void _setRefetchWithoutExtension(bool snapshot, bool value) {
+    if (snapshot) {
+      _snapshotRefetchWithoutExtension = value;
+    } else {
+      _issuerRefetchWithoutExtension = value;
+    }
   }
 
   Future<void> _replace(File file, Uint8List cert) async {
