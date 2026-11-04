@@ -9,8 +9,11 @@ use meshpay_core::api::{
 use meshpay_core::payer_tx_engine::PayerEngine;
 use meshpay_core::protocol_now::ProtocolNow;
 use meshpay_core::receiver_tx_engine::ReceiverEngine;
+use meshpay_core::tx_hashing::derive_tx_id;
 use meshpay_core::tx_keys::{compressed_public_key, signing_key_from_seed};
+use meshpay_core::tx_wire::ack_receipt::AckReceipt;
 use meshpay_core::tx_wire::cheque_spend_body::ChequeSpendBody;
+use meshpay_core::tx_wire::tx_propose::TxPropose;
 use prost::Message;
 use support::{E, T_SRV};
 
@@ -396,6 +399,77 @@ fn bridge_receiver(
   )
 }
 
+fn tamper_payer_signature(propose: &[u8]) -> Vec<u8> {
+  let mut decoded = TxPropose::decode(propose).unwrap();
+  decoded.spend.as_mut().unwrap().payer_signature[0] ^= 1;
+  decoded.encode_to_vec()
+}
+
+fn tamper_server_seal(propose: &[u8]) -> Vec<u8> {
+  let mut decoded = TxPropose::decode(propose).unwrap();
+  decoded.stub.as_mut().unwrap().server_signature[0] ^= 1;
+  decoded.encode_to_vec()
+}
+
+fn assert_ack_binds_the_signed_counter(propose: &[u8], ack: &[u8]) {
+  let propose = TxPropose::decode(propose).unwrap();
+  let spend = propose.spend.unwrap();
+  let body = ChequeSpendBody::decode(spend.body.as_slice()).unwrap();
+  assert_eq!(body.tx_id, derive_tx_id(body.counter, &spend.body).unwrap());
+  assert_eq!(AckReceipt::decode(ack).unwrap().tx_id, body.tx_id);
+}
+
+#[test]
+fn offline_acceptance_verifies_seal_signature_limits_time_revocation_and_counter() {
+  let pair = Pair::new();
+  let receiver = bridge_receiver(pair._directory.path(), E).unwrap();
+  receiver
+    .install_snapshot(support::signed_snapshot(T_SRV), 0, Some(1))
+    .unwrap();
+
+  let accepted = pair.propose_with_limits(1, T_SRV + E, 100, 100);
+  let ack = receiver
+    .on_propose(accepted.clone(), SECOND, Some(1))
+    .expect("valid offline cheque");
+  assert_ack_binds_the_signed_counter(&accepted, &ack);
+
+  let invalid_seal = tamper_server_seal(&pair.propose(2, T_SRV + E));
+  assert_eq!(
+    receiver.on_propose(invalid_seal, 2 * SECOND, Some(1)),
+    Err("stub server signature invalid".to_owned())
+  );
+  let invalid_payer_signature = tamper_payer_signature(&pair.propose(3, T_SRV + E));
+  assert!(
+    receiver
+      .on_propose(invalid_payer_signature, 3 * SECOND, Some(1))
+      .is_err()
+  );
+  assert_eq!(
+    receiver.on_propose(
+      pair.propose_with_limits(4, T_SRV + E, 101, 100),
+      4 * SECOND,
+      Some(1)
+    ),
+    Err("amount exceeds the stub maximum".to_owned())
+  );
+  assert_eq!(
+    receiver.on_propose(pair.propose(5, T_SRV - 1), 5 * SECOND, Some(1)),
+    Err("cheque expired".to_owned())
+  );
+
+  receiver
+    .install_snapshot(
+      support::signed_snapshot_revoking(T_SRV, 2, vec![support::issuer_key_id()]),
+      6 * SECOND,
+      Some(1),
+    )
+    .unwrap();
+  assert_eq!(
+    receiver.on_propose(pair.propose(6, T_SRV + E), 7 * SECOND, Some(1)),
+    Err("stub issued by a revoked server key".to_owned())
+  );
+}
+
 #[test]
 fn bridge_receiver_rejects_out_of_range_e_at_open() {
   let directory = tempfile::tempdir().unwrap();
@@ -443,6 +517,52 @@ fn bridge_snapshot_older_than_persisted_max_is_refused_after_restart() {
       .on_propose(pair.propose(1, current + 3600), 0, Some(2))
       .is_ok()
   );
+}
+
+#[test]
+fn bridge_three_simulated_reboots_preserve_the_protocol_clock_anchor() {
+  let directory = tempfile::tempdir().unwrap();
+  let pair = Pair::new();
+  let mut receiver = bridge_receiver(directory.path(), E).unwrap();
+  receiver
+    .install_snapshot(support::signed_snapshot(T_SRV), 10 * SECOND, Some(1))
+    .unwrap();
+
+  for boot_count in 2..=4 {
+    drop(receiver);
+    receiver = bridge_receiver(directory.path(), E).unwrap();
+    assert!(
+      receiver
+        .on_propose(
+          pair.propose(boot_count, T_SRV + E),
+          SECOND,
+          Some(boot_count)
+        )
+        .is_ok(),
+      "boot count {boot_count}"
+    );
+    let clock = persisted_bridge_clock(directory.path());
+    assert_eq!(clock.t_srv_unix, T_SRV);
+    assert_eq!(clock.max_now_unix, T_SRV);
+    assert!(clock.rebooted);
+  }
+}
+
+fn persisted_bridge_clock(
+  directory: &std::path::Path,
+) -> meshpay_core::receiver_clock_row::ReceiverClockRow {
+  ReceiverEngine::open(
+    &directory.join("r.db"),
+    &DB_KEY,
+    &PAYEE_SEED,
+    &compressed_public_key(&signing_key_from_seed(&PAYER_SEED).unwrap()),
+    OWN_ACCOUNT,
+    support::issuer_trust(),
+  )
+  .unwrap()
+  .load_clock()
+  .unwrap()
+  .unwrap()
 }
 
 /// After the protocol clock reached `T_SRV + 2d`, a reboot (or a caller faking one, with a
