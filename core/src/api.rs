@@ -674,7 +674,12 @@ impl ReceiverTxEngine {
       Some(held) if issued_at < held.t_srv_unix => {
         return Err("snapshot older than the held one".to_owned());
       }
-      Some(held) if issued_at == held.t_srv_unix => return Ok(issued_at),
+      Some(held) if issued_at == held.t_srv_unix => {
+        self
+          .engine
+          .save_clock_with_revoked_keys(&held, &verified.revoked_server_key_ids)?;
+        return Ok(issued_at);
+      }
       Some(held) => match Self::advance(&held, monotonic_nanos, boot_count) {
         Some((row, _)) => issued_at.max(row.max_now_unix),
         None => issued_at.max(held.max_now_unix),
