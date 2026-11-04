@@ -1,5 +1,5 @@
-//! LAB ONLY: `lab-key-cert <root_seed_file> <server_seed_file> <days>` prints the root public key
-//! hex and a root-signed ISSUER `ServerKeyCert` hex for the server key, valid from now. The real
+//! LAB ONLY: `lab-key-cert <root_seed_file> <server_seed_file> <days> [snapshot]` prints the root
+//! public key hex and a root-signed ISSUER (or SNAPSHOT) `ServerKeyCert` hex for the key, valid from now. The real
 //! root stays offline and never runs this on a connected machine.
 use crate::config::app_config::read_secret_file;
 use crate::crypto::p256_keys::{compressed_public_key, signing_key_from_seed};
@@ -14,8 +14,16 @@ fn read_key(path: &str) -> Result<SigningKey, String> {
 }
 
 pub fn print_lab_key_cert(args: &[String]) -> Result<(), String> {
-  let [root_file, server_file, days] = args else {
-    return Err("usage: lab-key-cert <root_seed_file> <server_seed_file> <days>".to_owned());
+  let (root_file, server_file, days, role) = match args {
+    [root, server, days] => (root, server, days, ServerKeyRole::Issuer),
+    [root, server, days, role] if role == "snapshot" => {
+      (root, server, days, ServerKeyRole::Snapshot)
+    }
+    _ => {
+      return Err(
+        "usage: lab-key-cert <root_seed_file> <server_seed_file> <days> [snapshot]".to_owned(),
+      );
+    }
   };
   let (root, server) = (read_key(root_file)?, read_key(server_file)?);
   let days: u64 = days
@@ -25,13 +33,7 @@ pub fn print_lab_key_cert(args: &[String]) -> Result<(), String> {
     .duration_since(std::time::UNIX_EPOCH)
     .map_err(|e| e.to_string())?
     .as_secs();
-  let cert = issue_cert(
-    &root,
-    &server,
-    ServerKeyRole::Issuer,
-    now,
-    now + days * SECONDS_PER_DAY,
-  );
+  let cert = issue_cert(&root, &server, role, now, now + days * SECONDS_PER_DAY);
   println!("{}", hex::encode(compressed_public_key(&root)));
   println!("{}", hex::encode(cert.encode_to_vec()));
   Ok(())

@@ -14,6 +14,10 @@ pub struct AppConfig {
   pub server_root_public_key_hex: String,
   /// Root-signed ISSUER `ServerKeyCert` of the signing key (protobuf, hex), read from a file.
   pub server_key_cert_hex: String,
+  /// P-256 seed of the SNAPSHOT key, 32 bytes hex. Secret; read from a file (Docker secret).
+  pub server_snapshot_key_hex: String,
+  /// Root-signed SNAPSHOT `ServerKeyCert` of the snapshot key (protobuf, hex), read from a file.
+  pub server_snapshot_key_cert_hex: String,
   /// `f`: max value per cheque.
   pub cap_cheque_units: u64,
   /// `R`: max reserve per chequebook and max pending reserve per wallet.
@@ -32,6 +36,8 @@ pub struct AppConfig {
   pub challenge_limit_per_minute: u32,
   /// Kill-switch snapshots per minute per process (`POST /v1/control/snapshot`).
   pub control_limit_per_minute: u32,
+  /// Public key / revocation snapshot reads per minute per process.
+  pub public_read_limit_per_minute: u32,
   /// PEM file with the trusted attestation roots (operator supplied; Google hardware roots).
   pub attestation_roots_pem_file: String,
   /// One revoked certificate serial (hex) per line; operator supplied.
@@ -46,6 +52,8 @@ impl AppConfig {
   pub fn from_env() -> Result<Self, String> {
     let key = read_secret_file(&required("SERVER_SIGNING_KEY_FILE")?)?;
     let cert = read_secret_file(&required("SERVER_KEY_CERT_FILE")?)?;
+    let snapshot_key = read_secret_file(&required("SERVER_SNAPSHOT_KEY_FILE")?)?;
+    let snapshot_cert = read_secret_file(&required("SERVER_SNAPSHOT_KEY_CERT_FILE")?)?;
     let config = Self {
       database_url: required("DATABASE_URL")?,
       listen_addr: required("LISTEN_ADDR")?,
@@ -53,6 +61,8 @@ impl AppConfig {
       server_signing_key_hex: key,
       server_root_public_key_hex: required("SERVER_ROOT_PUBLIC_KEY_HEX")?,
       server_key_cert_hex: cert,
+      server_snapshot_key_hex: snapshot_key,
+      server_snapshot_key_cert_hex: snapshot_cert,
       cap_cheque_units: parsed("CAP_CHEQUE_UNITS")?,
       cap_reserve_units: parsed("CAP_RESERVE_UNITS")?,
       cheque_max_count: parsed("CHEQUE_MAX_COUNT")?,
@@ -63,6 +73,7 @@ impl AppConfig {
       register_limit_per_minute: parsed("REGISTER_LIMIT_PER_MINUTE")?,
       challenge_limit_per_minute: parsed("CHALLENGE_LIMIT_PER_MINUTE")?,
       control_limit_per_minute: parsed("CONTROL_LIMIT_PER_MINUTE")?,
+      public_read_limit_per_minute: parsed("PUBLIC_READ_LIMIT_PER_MINUTE")?,
       attestation_roots_pem_file: required("ATTESTATION_ROOTS_PEM_FILE")?,
       attestation_revocation_file: required("ATTESTATION_REVOCATION_FILE")?,
       attestation_challenge_ttl_seconds: parsed("ATTESTATION_CHALLENGE_TTL_SECONDS")?,
