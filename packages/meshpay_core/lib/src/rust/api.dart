@@ -10,7 +10,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'prepared_ack.dart';
 import 'prepared_propose.dart';
 
-// These functions are ignored because they are not marked as `pub`: `anchor`, `append_path_suffix`, `context`, `create_selfcheck_database_path`, `noise_error`, `noise_xk_params`, `outcome`, `read_selfcheck_value`, `remove_selfcheck_database`, `run_noise_xk_selfcheck`, `run_p256_selfcheck`, `run_sqlcipher_selfcheck`, `step_handshake`, `transport_step`, `with_engine`
+// These functions are ignored because they are not marked as `pub`: `advance`, `append_path_suffix`, `clock_lock`, `context`, `create_selfcheck_database_path`, `noise_error`, `noise_xk_params`, `outcome`, `read_selfcheck_value`, `remove_selfcheck_database`, `run_noise_xk_selfcheck`, `run_p256_selfcheck`, `run_sqlcipher_selfcheck`, `step_handshake`, `transport_step`, `with_engine`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `NoiseStage`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`
 
@@ -30,6 +30,28 @@ Future<CoreSelfcheck> coreSelfcheck({required String storageDir}) =>
 
 Future<LabSigningKey> generateLabSigningKey() =>
     RustLib.instance.api.crateApiGenerateLabSigningKey();
+
+/// LAB ONLY: root key the lab receivers pin for ISSUER certs (seed public on purpose).
+Future<Uint8List> labIssuerRootPublicKey() =>
+    RustLib.instance.api.crateApiLabIssuerRootPublicKey();
+
+/// LAB ONLY: lab ISSUER `ServerKeyCert` valid 30 days from `not_before_unix`.
+Future<Uint8List> labIssuerCert({required BigInt notBeforeUnix}) =>
+    RustLib.instance.api.crateApiLabIssuerCert(notBeforeUnix: notBeforeUnix);
+
+/// LAB ONLY: `ChequeStub` sealed by the lab ISSUER key (the lab has no issuing server).
+/// `signer_pubkey` (SEC1, 33 or 65 bytes) is stored compressed, as the receiver compares it.
+Future<Uint8List> labChequeStub({
+  required List<int> chequeId,
+  required List<int> signerPubkey,
+  required BigInt maxAmountUnits,
+  required BigInt expiresAtUnix,
+}) => RustLib.instance.api.crateApiLabChequeStub(
+  chequeId: chequeId,
+  signerPubkey: signerPubkey,
+  maxAmountUnits: maxAmountUnits,
+  expiresAtUnix: expiresAtUnix,
+);
 
 /// `SyncEnvelope` bytes for `encrypted_server_batch` (opaque to carriers); `envelope_id` is its hash.
 Uint8List buildDtnEnvelope({
@@ -203,8 +225,13 @@ abstract class ReceiverTxEngine implements RustOpaqueInterface {
   });
 
   /// Verifies `snapshot` with the SNAPSHOT key and anchors the protocol clock on its
-  /// `issued_at_unix` (monotonic reading from the native plugin). Returns the held snapshot's
-  /// `issued_at_unix` (the newest seen).
+  /// `issued_at_unix` (monotonic reading from the native plugin). The state is persisted: an older
+  /// snapshot is refused, the same one is a no-op, a newer one always re-anchors and clears the
+  /// sticky reboot flag. No forward-jump cap: the SNAPSHOT signature is the trust root, and a cap
+  /// would turn an old-but-genuine first snapshot into a lockout after a long offline gap.
+  /// Residual: a validly signed far-future snapshot (leaked SNAPSHOT key) becomes a permanent
+  /// floor for "now"; that is a total compromise handled by the kill switch. Returns the held
+  /// snapshot's `issued_at_unix`.
   Future<BigInt> installSnapshot({
     required List<int> snapshot,
     required BigInt monotonicNanos,
@@ -218,7 +245,9 @@ abstract class ReceiverTxEngine implements RustOpaqueInterface {
     BigInt? bootCount,
   });
 
-  /// `snapshot_public_key` is the compressed P-256 SNAPSHOT role key; `expiry_secs` is `E`.
+  /// `snapshot_public_key` is the compressed P-256 SNAPSHOT role key; `expiry_secs` is `E`;
+  /// `issuer_cert` is the ISSUER `ServerKeyCert` chained to the pinned `issuer_root_public_key`,
+  /// whose key must seal every incoming stub.
   static Future<ReceiverTxEngine> open({
     required String dbPath,
     required List<int> dbKey,
@@ -227,6 +256,8 @@ abstract class ReceiverTxEngine implements RustOpaqueInterface {
     required List<int> ownAccountId,
     required List<int> snapshotPublicKey,
     required BigInt expirySecs,
+    required List<int> issuerRootPublicKey,
+    required List<int> issuerCert,
   }) => RustLib.instance.api.crateApiReceiverTxEngineOpen(
     dbPath: dbPath,
     dbKey: dbKey,
@@ -235,6 +266,8 @@ abstract class ReceiverTxEngine implements RustOpaqueInterface {
     ownAccountId: ownAccountId,
     snapshotPublicKey: snapshotPublicKey,
     expirySecs: expirySecs,
+    issuerRootPublicKey: issuerRootPublicKey,
+    issuerCert: issuerCert,
   );
 
   /// External-signer mode (Android Keystore): no seed. Flow: `store_propose`, `prepare_ack`,
@@ -247,6 +280,8 @@ abstract class ReceiverTxEngine implements RustOpaqueInterface {
     required List<int> ownAccountId,
     required List<int> snapshotPublicKey,
     required BigInt expirySecs,
+    required List<int> issuerRootPublicKey,
+    required List<int> issuerCert,
   }) => RustLib.instance.api.crateApiReceiverTxEngineOpenExternal(
     dbPath: dbPath,
     dbKey: dbKey,
@@ -255,6 +290,8 @@ abstract class ReceiverTxEngine implements RustOpaqueInterface {
     ownAccountId: ownAccountId,
     snapshotPublicKey: snapshotPublicKey,
     expirySecs: expirySecs,
+    issuerRootPublicKey: issuerRootPublicKey,
+    issuerCert: issuerCert,
   );
 
   Future<PreparedAck> prepareAck({required List<int> txId});

@@ -70,7 +70,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -2032442019;
+  int get rustContentHash => 928236927;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -243,6 +243,8 @@ abstract class RustLibApi extends BaseApi {
     required List<int> ownAccountId,
     required List<int> snapshotPublicKey,
     required BigInt expirySecs,
+    required List<int> issuerRootPublicKey,
+    required List<int> issuerCert,
   });
 
   Future<ReceiverTxEngine> crateApiReceiverTxEngineOpenExternal({
@@ -253,6 +255,8 @@ abstract class RustLibApi extends BaseApi {
     required List<int> ownAccountId,
     required List<int> snapshotPublicKey,
     required BigInt expirySecs,
+    required List<int> issuerRootPublicKey,
+    required List<int> issuerCert,
   });
 
   Future<PreparedAck> crateApiReceiverTxEnginePrepareAck({
@@ -283,6 +287,17 @@ abstract class RustLibApi extends BaseApi {
   Future<LabSigningKey> crateApiGenerateLabSigningKey();
 
   NoiseKeypair crateApiGenerateNoiseStaticKeypair();
+
+  Future<Uint8List> crateApiLabChequeStub({
+    required List<int> chequeId,
+    required List<int> signerPubkey,
+    required BigInt maxAmountUnits,
+    required BigInt expiresAtUnix,
+  });
+
+  Future<Uint8List> crateApiLabIssuerCert({required BigInt notBeforeUnix});
+
+  Future<Uint8List> crateApiLabIssuerRootPublicKey();
 
   int crateApiPing({required int n});
 
@@ -1430,6 +1445,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required List<int> ownAccountId,
     required List<int> snapshotPublicKey,
     required BigInt expirySecs,
+    required List<int> issuerRootPublicKey,
+    required List<int> issuerCert,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -1442,6 +1459,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_list_prim_u_8_loose(ownAccountId, serializer);
           sse_encode_list_prim_u_8_loose(snapshotPublicKey, serializer);
           sse_encode_u_64(expirySecs, serializer);
+          sse_encode_list_prim_u_8_loose(issuerRootPublicKey, serializer);
+          sse_encode_list_prim_u_8_loose(issuerCert, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1463,6 +1482,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           ownAccountId,
           snapshotPublicKey,
           expirySecs,
+          issuerRootPublicKey,
+          issuerCert,
         ],
         apiImpl: this,
       ),
@@ -1480,6 +1501,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           "ownAccountId",
           "snapshotPublicKey",
           "expirySecs",
+          "issuerRootPublicKey",
+          "issuerCert",
         ],
       );
 
@@ -1492,6 +1515,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required List<int> ownAccountId,
     required List<int> snapshotPublicKey,
     required BigInt expirySecs,
+    required List<int> issuerRootPublicKey,
+    required List<int> issuerCert,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -1504,6 +1529,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_list_prim_u_8_loose(ownAccountId, serializer);
           sse_encode_list_prim_u_8_loose(snapshotPublicKey, serializer);
           sse_encode_u_64(expirySecs, serializer);
+          sse_encode_list_prim_u_8_loose(issuerRootPublicKey, serializer);
+          sse_encode_list_prim_u_8_loose(issuerCert, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1525,6 +1552,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           ownAccountId,
           snapshotPublicKey,
           expirySecs,
+          issuerRootPublicKey,
+          issuerCert,
         ],
         apiImpl: this,
       ),
@@ -1542,6 +1571,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           "ownAccountId",
           "snapshotPublicKey",
           "expirySecs",
+          "issuerRootPublicKey",
+          "issuerCert",
         ],
       );
 
@@ -1801,13 +1832,111 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<Uint8List> crateApiLabChequeStub({
+    required List<int> chequeId,
+    required List<int> signerPubkey,
+    required BigInt maxAmountUnits,
+    required BigInt expiresAtUnix,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_u_8_loose(chequeId, serializer);
+          sse_encode_list_prim_u_8_loose(signerPubkey, serializer);
+          sse_encode_u_64(maxAmountUnits, serializer);
+          sse_encode_u_64(expiresAtUnix, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 40,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_u_8_strict,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiLabChequeStubConstMeta,
+        argValues: [chequeId, signerPubkey, maxAmountUnits, expiresAtUnix],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLabChequeStubConstMeta => const TaskConstMeta(
+    debugName: "lab_cheque_stub",
+    argNames: ["chequeId", "signerPubkey", "maxAmountUnits", "expiresAtUnix"],
+  );
+
+  @override
+  Future<Uint8List> crateApiLabIssuerCert({required BigInt notBeforeUnix}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_64(notBeforeUnix, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 41,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_u_8_strict,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiLabIssuerCertConstMeta,
+        argValues: [notBeforeUnix],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLabIssuerCertConstMeta => const TaskConstMeta(
+    debugName: "lab_issuer_cert",
+    argNames: ["notBeforeUnix"],
+  );
+
+  @override
+  Future<Uint8List> crateApiLabIssuerRootPublicKey() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 42,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_u_8_strict,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiLabIssuerRootPublicKeyConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLabIssuerRootPublicKeyConstMeta =>
+      const TaskConstMeta(
+        debugName: "lab_issuer_root_public_key",
+        argNames: [],
+      );
+
+  @override
   int crateApiPing({required int n}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_u_32(n, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 40)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 43)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_u_32,
@@ -3158,8 +3287,13 @@ class ReceiverTxEngineImpl extends RustOpaque implements ReceiverTxEngine {
   );
 
   /// Verifies `snapshot` with the SNAPSHOT key and anchors the protocol clock on its
-  /// `issued_at_unix` (monotonic reading from the native plugin). Returns the held snapshot's
-  /// `issued_at_unix` (the newest seen).
+  /// `issued_at_unix` (monotonic reading from the native plugin). The state is persisted: an older
+  /// snapshot is refused, the same one is a no-op, a newer one always re-anchors and clears the
+  /// sticky reboot flag. No forward-jump cap: the SNAPSHOT signature is the trust root, and a cap
+  /// would turn an old-but-genuine first snapshot into a lockout after a long offline gap.
+  /// Residual: a validly signed far-future snapshot (leaked SNAPSHOT key) becomes a permanent
+  /// floor for "now"; that is a total compromise handled by the kill switch. Returns the held
+  /// snapshot's `issued_at_unix`.
   Future<BigInt> installSnapshot({
     required List<int> snapshot,
     required BigInt monotonicNanos,

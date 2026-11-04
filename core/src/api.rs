@@ -4,6 +4,8 @@ use crate::dtn_buffer::DtnEngine;
 use crate::dtn_ingest_outcome::IngestOutcome;
 use crate::dtn_peer_session::DtnPeerSession;
 use crate::dtn_snapshot::verify_snapshot;
+use crate::issuer_trust::IssuerTrust;
+use crate::lab_issuer;
 use crate::payer_tx_engine::PayerEngine;
 use crate::prepared_ack::PreparedAck;
 use crate::prepared_propose::PreparedPropose;
@@ -11,7 +13,10 @@ use crate::protocol_clock::{MAX_FORWARD_JUMP_SECONDS, ProtocolClock, VerifiedSer
 use crate::protocol_now::ProtocolNow;
 use crate::receiver_clock_row::ReceiverClockRow;
 use crate::receiver_tx_engine::ReceiverEngine;
-use crate::tx_keys::{compressed_public_key, signing_key_from_seed, verifying_key_from_sec1};
+use crate::tx_keys::{
+  compressed_public_key, compressed_public_key_of, signing_key_from_seed, verifying_key_from_sec1,
+};
+use crate::tx_wire::cheque_stub_body::ChequeStubBody;
 use crate::tx_wire::sync_envelope::SyncEnvelope;
 use flutter_rust_bridge::frb;
 use p256::ecdsa::{
@@ -431,6 +436,33 @@ pub fn generate_lab_signing_key() -> Result<LabSigningKey, String> {
   }
 }
 
+/// LAB ONLY: root key the lab receivers pin for ISSUER certs (seed public on purpose).
+pub fn lab_issuer_root_public_key() -> Vec<u8> {
+  lab_issuer::root_public_key()
+}
+
+/// LAB ONLY: lab ISSUER `ServerKeyCert` valid 30 days from `not_before_unix`.
+pub fn lab_issuer_cert(not_before_unix: u64) -> Vec<u8> {
+  lab_issuer::cert(not_before_unix)
+}
+
+/// LAB ONLY: `ChequeStub` sealed by the lab ISSUER key (the lab has no issuing server).
+/// `signer_pubkey` (SEC1, 33 or 65 bytes) is stored compressed, as the receiver compares it.
+pub fn lab_cheque_stub(
+  cheque_id: Vec<u8>,
+  signer_pubkey: Vec<u8>,
+  max_amount_units: u64,
+  expires_at_unix: u64,
+) -> Result<Vec<u8>, String> {
+  Ok(lab_issuer::seal_stub(ChequeStubBody {
+    cheque_id,
+    signer_pubkey: compressed_public_key_of(&verifying_key_from_sec1(&signer_pubkey)?),
+    max_amount_units,
+    expires_at_unix,
+    ..Default::default()
+  }))
+}
+
 /// Payer side of the two-phase commit (PRD 6.5). All messages are protobuf bytes.
 pub struct PayerTxEngine {
   engine: PayerEngine,
@@ -540,7 +572,10 @@ pub struct ReceiverTxEngine {
 }
 
 impl ReceiverTxEngine {
-  /// `snapshot_public_key` is the compressed P-256 SNAPSHOT role key; `expiry_secs` is `E`.
+  /// `snapshot_public_key` is the compressed P-256 SNAPSHOT role key; `expiry_secs` is `E`;
+  /// `issuer_cert` is the ISSUER `ServerKeyCert` chained to the pinned `issuer_root_public_key`,
+  /// whose key must seal every incoming stub.
+  #[allow(clippy::too_many_arguments)]
   pub fn open(
     db_path: String,
     db_key: Vec<u8>,
@@ -549,6 +584,8 @@ impl ReceiverTxEngine {
     own_account_id: Vec<u8>,
     snapshot_public_key: Vec<u8>,
     expiry_secs: u64,
+    issuer_root_public_key: Vec<u8>,
+    issuer_cert: Vec<u8>,
   ) -> Result<ReceiverTxEngine, String> {
     Self::with_engine(
       ReceiverEngine::open(
@@ -557,6 +594,7 @@ impl ReceiverTxEngine {
         &signing_seed,
         &payer_public_key,
         &own_account_id,
+        IssuerTrust::new(&issuer_root_public_key, &issuer_cert)?,
       )?,
       &snapshot_public_key,
       expiry_secs,
@@ -565,6 +603,7 @@ impl ReceiverTxEngine {
 
   /// External-signer mode (Android Keystore): no seed. Flow: `store_propose`, `prepare_ack`,
   /// sign `message` in the Keystore, `finish_ack`.
+  #[allow(clippy::too_many_arguments)]
   pub fn open_external(
     db_path: String,
     db_key: Vec<u8>,
@@ -573,6 +612,8 @@ impl ReceiverTxEngine {
     own_account_id: Vec<u8>,
     snapshot_public_key: Vec<u8>,
     expiry_secs: u64,
+    issuer_root_public_key: Vec<u8>,
+    issuer_cert: Vec<u8>,
   ) -> Result<ReceiverTxEngine, String> {
     Self::with_engine(
       ReceiverEngine::open_external(
@@ -581,6 +622,7 @@ impl ReceiverTxEngine {
         &own_public_key,
         &payer_public_key,
         &own_account_id,
+        IssuerTrust::new(&issuer_root_public_key, &issuer_cert)?,
       )?,
       &snapshot_public_key,
       expiry_secs,
