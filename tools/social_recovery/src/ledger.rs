@@ -175,6 +175,9 @@ impl Ledger {
   /// the pending request it was signed for (cert hash and request counter are recomputed here).
   pub fn cancel(&mut self, cancel: &RecoveryCancel, now: u64) -> Result<(), RecoveryError> {
     let account = self.account(&cancel.account_id)?;
+    if cancel.epoch != account.epoch {
+      return Err(RecoveryError::WrongEpoch);
+    }
     let pending = account.pending.as_ref().ok_or(RecoveryError::NoPending)?;
     if now >= pending.activates_at {
       return Err(RecoveryError::TimeLockActive);
