@@ -8,22 +8,18 @@ import 'package:meshpay_core/meshpay_core.dart'
     show RustLib, labIssuerRootPublicKey, verifySnapshotCertAtTime;
 
 void main() {
-  setUpAll(() {
-    final libraryName = switch (Platform.operatingSystem) {
-      'macos' => 'libmeshpay_core.dylib',
-      'windows' => 'meshpay_core.dll',
-      _ => 'libmeshpay_core.so',
-    };
-    return RustLib.init(
-      externalLibrary: ExternalLibrary.open(
-        File('../core/target/debug/$libraryName').absolute.path,
-      ),
-    );
-  });
-
+  final libraryName = switch (Platform.operatingSystem) {
+    'macos' => 'libmeshpay_core.dylib',
+    'windows' => 'meshpay_core.dll',
+    _ => 'libmeshpay_core.so',
+  };
+  final nativeLibraryFile = File('../core/target/debug/$libraryName').absolute;
   test(
     'lab cert passes the core window check for old and new snapshots',
     () async {
+      await RustLib.init(
+        externalLibrary: ExternalLibrary.open(nativeLibraryFile.path),
+      );
       final cert = await LabDtnSnapshotCertHelper.cert();
       final rootPublicKey = await labIssuerRootPublicKey();
       final nowUnix = DateTime.now().millisecondsSinceEpoch ~/ 1000;
@@ -42,5 +38,8 @@ void main() {
         timestampUnix: BigInt.from(nowUnix),
       );
     },
+    skip: nativeLibraryFile.existsSync()
+        ? false
+        : 'native lib not built: run cargo build in core/ to enable',
   );
 }
