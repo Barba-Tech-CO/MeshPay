@@ -5,6 +5,7 @@ use meshpay_core::payer_tx_engine::PayerEngine;
 use meshpay_core::tx_keys::{compressed_public_key, signing_key_from_seed};
 use meshpay_core::tx_wire::cheque_spend_body::ChequeSpendBody;
 use prost::Message;
+use std::time::{SystemTime, UNIX_EPOCH};
 use support::{T_SRV, cert_with, issuer_cert, issuer_root_public_key, signed_snapshot};
 
 const DB_KEY: [u8; 32] = [6; 32];
@@ -13,9 +14,31 @@ const OWN_ACCOUNT: &[u8] = b"receiver-account";
 const SNAPSHOT_ROLE: i32 = 2;
 const ISSUER_ROLE: i32 = 1;
 const DAY: u64 = 86_400;
+const BACKDATE: u64 = 29 * DAY;
 
 fn snapshot_cert(role: i32, root_seed: [u8; 32], not_before: u64, not_after: u64) -> Vec<u8> {
   cert_with(root_seed, [5; 32], role, not_before, not_after)
+}
+
+#[test]
+fn lab_snapshot_cert_accepts_old_and_current_snapshot_times() {
+  let now = SystemTime::now()
+    .duration_since(UNIX_EPOCH)
+    .unwrap()
+    .as_secs();
+  let old_timestamp = now - BACKDATE;
+  let cert = meshpay_core::lab_issuer::snapshot_cert(old_timestamp);
+  let root_public_key = meshpay_core::lab_issuer::root_public_key();
+
+  assert!(
+    meshpay_core::api::verify_snapshot_cert_at_time(
+      root_public_key.clone(),
+      cert.clone(),
+      old_timestamp,
+    )
+    .is_ok()
+  );
+  assert!(meshpay_core::api::verify_snapshot_cert_at_time(root_public_key, cert, now).is_ok());
 }
 
 #[test]
