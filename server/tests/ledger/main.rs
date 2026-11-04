@@ -3,6 +3,7 @@ mod attestation_chain;
 mod attestation_der;
 mod attestation_pki;
 mod attestation_registration;
+mod cap_random;
 mod cases;
 mod deposit_race;
 mod deposit_throughput;

@@ -78,6 +78,14 @@ pub async fn setup_isolated(supply_cap: u64, initial_grant: u64) -> Option<TestA
   setup_inner(|_| {}, Some((supply_cap, initial_grant)), None).await
 }
 
+pub async fn setup_isolated_with(
+  supply_cap: u64,
+  initial_grant: u64,
+  tweak: impl FnOnce(&mut AppConfig),
+) -> Option<TestApp> {
+  setup_inner(tweak, Some((supply_cap, initial_grant)), None).await
+}
+
 /// Same URL on another database (the URLs end with `/<database>`).
 fn on_database(url: &str, database: &str) -> String {
   format!("{}/{database}", url.rsplit_once('/').unwrap().0)
