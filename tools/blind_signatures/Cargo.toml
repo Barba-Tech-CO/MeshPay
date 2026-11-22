@@ -14,7 +14,7 @@ leak-blinding-secret = []
 opt-level = 3
 
 [dependencies]
-blind-rsa-signatures = "0.18.0"
+blind-rsa-signatures = "0.19.0"
 
 [dev-dependencies]
 rand_chacha = "0.10.0"
